@@ -1,71 +1,81 @@
 import os
-from datetime import datetime
 import pandas as pd
 import yfinance as yf
 
 
 def fetch_and_save_to_parquet(
     tickers: list[str], period: str = "5y", output_dir: str = "data/parquet"
-):
-    """Descarga datos de yfinance y los guarda en formato Parquet."""
-    print(f"Descargando datos para los tickers: {tickers} (período: {period})...")
+) -> None:
+    """Descarga datos de yfinance de forma segura y los almacena en Parquet."""
+    print(f"Iniciando descarga para {len(tickers)} tickers (período: {period})...")
+    
+    processed_dfs = []
+    failed_tickers = []
 
-    # 1. Extracción con yfinance
-    df = yf.download(
-        tickers, period=period, interval="1d", group_by="ticker", auto_adjust=True
-    )
+    # Iterar individualmente para manejo limpio de excepciones por ticker
+    for ticker in tickers:
+        try:
+            print(f"Descargando {ticker}...")
+            df_ticker = yf.download(
+                ticker, period=period, interval="1d", auto_adjust=True, progress=False
+            )
+            
+            if df_ticker.empty:
+                print(f"⚠️ Advertencia: No se encontraron datos para {ticker}")
+                failed_tickers.append(ticker)
+                continue
 
-    if df.empty:
-        print("No se encontraron datos.")
+            # Aplanar MultiIndex si se genera automáticamente
+            if isinstance(df_ticker.columns, pd.MultiIndex):
+                df_ticker.columns = df_ticker.columns.get_level_values(0)
+
+            df_ticker = df_ticker.reset_index()
+            df_ticker["Ticker"] = ticker
+            
+            # Normalizar nombres de columnas a minúsculas
+            df_ticker.columns = [str(col).lower().replace(" ", "_") for col in df_ticker.columns]
+            
+            processed_dfs.append(df_ticker)
+            
+        except Exception as e:
+            print(f"❌ Error al descargar {ticker}: {e}")
+            failed_tickers.append(ticker)
+
+    if not processed_dfs:
+        print("No se pudo procesar ningún ticker.")
         return
 
-    # 2. Transformación y Aplanado (Manejo de MultiIndex si son varios tickers)
-    processed_dfs = []
-
-    if len(tickers) == 1:
-        ticker = tickers[0]
-        df_single = df.reset_index()
-        df_single["Ticker"] = ticker
-        processed_dfs.append(df_single)
-    else:
-        for ticker in tickers:
-            if ticker in df.columns.levels[0]:
-                df_ticker = df[ticker].dropna(how="all").reset_index()
-                df_ticker["Ticker"] = ticker
-                processed_dfs.append(df_ticker)
-
+    # Consolidar todos los DataFrames
     final_df = pd.concat(processed_dfs, ignore_index=True)
 
-    # 3. Limpieza y estandarización de nombres de columnas
-    final_df.columns = [str(col).lower().replace(" ", "_") for col in final_df.columns]
-
-    # Convertir fecha a datetime explícito y añadir columnas de particionamiento
+    # Añadir campos de particionamiento
     final_df["date"] = pd.to_datetime(final_df["date"])
     final_df["year"] = final_df["date"].dt.year
     final_df["month"] = final_df["date"].dt.month
 
-    # 4. Asegurar directorio de salida
+    # Crear directorio si no existe
     os.makedirs(output_dir, exist_ok=True)
-
-    # 5. Guardar en Parquet (Particionado por Año/Mes o Archivo Único)
     parquet_path = os.path.join(output_dir, "financial_data.parquet")
 
+    # Guardar en formato Parquet
     final_df.to_parquet(
         parquet_path, engine="pyarrow", compression="snappy", index=False
     )
 
-    print(f"✅ Ingesta completada con éxito.")
-    print(f"Total registros ingestados: {len(final_df)}")
-    print(f"Archivo guardado en: {parquet_path}\n")
-
-    # Verificación de lectura rápida
-    df_read = pd.read_parquet(parquet_path)
-    print("Muestra de datos guardados:")
-    print(df_read.head())
+    print("\n" + "="*50)
+    print("✅ Ingesta a Parquet completada con éxito.")
+    print(f"Filas totales almacenadas : {len(final_df)}")
+    print(f"Archivo guardado en      : {parquet_path}")
+    if failed_tickers:
+        print(f"Tickers con error        : {failed_tickers}")
+    print("="*50)
 
 
 if __name__ == "__main__":
-    # Tickers de prueba
-    test_tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "SHA0", "6324", "6268", "6594"]
+    # Tickers con prefijos/sufijos de bolsa corregidos
+    test_tickers = [
+        "AAPL", "MSFT", "GOOGL", "NVDA", "TSLA",
+        "SHA0.DE", "6324.T", "6268.T", "6594.T"
+    ]
     fetch_and_save_to_parquet(tickers=test_tickers, period="5y")
-          
+        
