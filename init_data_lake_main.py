@@ -66,6 +66,6 @@ def fetch_and_save_to_parquet(
 
 if __name__ == "__main__":
     # Tickers de prueba
-    test_tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", TSLA, SHA0, 6324, 6268, 6594]
+    test_tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "SHA0", "6324", "6268", "6594"]
     fetch_and_save_to_parquet(tickers=test_tickers, period="5y")
           
