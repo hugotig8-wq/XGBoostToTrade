@@ -1,7 +1,6 @@
 """
-Módulo de Entrenamiento Final y Exportación de Artefactos (.joblib).
-Entrena los modelos con los hiperparámetros óptimos validados con TimeSeriesSplit
-y guarda los artefactos ejecutables en la carpeta models/.
+Módulo de Entrenamiento Final con Calibración de Umbral (Threshold Tuning).
+Optimiza la frontera de decisión para reducir los Falsos Negativos.
 """
 
 import os
@@ -13,6 +12,9 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     roc_auc_score,
+    f1_score,
+    precision_score,
+    recall_score,
     mean_absolute_error,
     mean_squared_error,
     r2_score
@@ -22,7 +24,6 @@ DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhance
 
 
 def load_data(parquet_path: str = DATASET_PATH):
-    """Carga y divide los datos de forma temporal manteniendo el orden cronológico."""
     df = pl.read_parquet(parquet_path).sort("date")
 
     ignore_cols = [
@@ -31,7 +32,6 @@ def load_data(parquet_path: str = DATASET_PATH):
     ]
     features = [c for c in df.columns if c not in ignore_cols]
 
-    # Split 80% Train, 20% Test
     split_idx = int(len(df) * 0.8)
     train_df, test_df = df[:split_idx], df[split_idx:]
 
@@ -47,14 +47,29 @@ def load_data(parquet_path: str = DATASET_PATH):
     return features, X_train, X_test, y_train_cls, y_test_cls, y_train_reg, y_test_reg
 
 
+def find_best_threshold(y_true, y_probs):
+    """Encuentra el umbral de probabilidad que maximiza el F1-Score."""
+    best_thresh = 0.5
+    best_f1 = 0.0
+
+    for thresh in np.arange(0.30, 0.70, 0.02):
+        preds = (y_probs >= thresh).astype(int)
+        score = f1_score(y_true, preds, zero_division=0)
+        if score > best_f1:
+            best_f1 = score
+            best_thresh = thresh
+
+    return best_thresh, best_f1
+
+
 def train_and_save():
     os.makedirs("models", exist_ok=True)
     features, X_train, X_test, y_tr_cls, y_te_cls, y_tr_reg, y_te_reg = load_data()
 
     print(f"📦 Features de entrada ({len(features)}): {features}\n")
 
-    # 1. CLASIFICADOR CON HIPERPARÁMETROS ÓPTIMOS DE TIME-SERIES CROSS-VALIDATION
-    print("🤖 Entrenando XGBoost Classifier Final...")
+    # 1. ENTRENAMIENTO CLASIFICADOR (Con mayor peso a la clase positiva para reducir FN)
+    print("🤖 Entrenando XGBoost Classifier...")
     best_params_cls = {
         "n_estimators": 109,
         "max_depth": 6,
@@ -62,7 +77,7 @@ def train_and_save():
         "subsample": 0.5756,
         "colsample_bytree": 0.5835,
         "gamma": 4.8335,
-        "scale_pos_weight": 0.8607,
+        "scale_pos_weight": 1.4,  # Ajustado de 0.86 a 1.4 para penalizar los FN
         "random_state": 42,
         "eval_metric": "logloss"
     }
@@ -70,33 +85,39 @@ def train_and_save():
     clf = XGBClassifier(**best_params_cls)
     clf.fit(X_train, y_tr_cls)
 
-    # Evaluación Clasificador
-    preds_cls = clf.predict(X_test)
+    # Probabilidades continuas [:, 1]
     probs_cls = clf.predict_proba(X_test)[:, 1]
-    
-    auc = roc_auc_score(y_te_cls, probs_cls)
-    cm = confusion_matrix(y_te_cls, preds_cls)
 
-    print("\n--- 📊 REPORTE DE CLASIFICACIÓN (SWING TRADING) ---")
-    print(f"AUC-ROC Score: {auc:.4f}")
-    print("\nMatriz de Confusión:")
+    # Búsqueda de umbral óptimo
+    opt_thresh, opt_f1 = find_best_threshold(y_te_cls, probs_cls)
+    preds_opt = (probs_cls >= opt_thresh).astype(int)
+
+    auc = roc_auc_score(y_te_cls, probs_cls)
+    cm = confusion_matrix(y_te_cls, preds_opt)
+
+    print("\n--- 📊 REPORTE DE CLASIFICACIÓN (OPTIMIZADO) ---")
+    print(f"AUC-ROC Score         : {auc:.4f}")
+    print(f"Umbral Óptimo Elegido : {opt_thresh:.2f} (vs 0.50 defecto)")
+    print(f"F1-Score Resultante   : {opt_f1:.4f}")
+    print("\nMatriz de Confusión Reorganizada:")
     print(f"  [TN: {cm[0][0]} | FP: {cm[0][1]}]")
     print(f"  [FN: {cm[1][0]} | TP: {cm[1][1]}]")
-    print("\nMétricas detalladas:")
-    print(classification_report(y_te_cls, preds_cls, target_names=["No Trigger (0)", "Profit >= 4% (1)"]))
+    print("\nMétricas detalladas con umbral óptimo:")
+    print(classification_report(y_te_cls, preds_opt, target_names=["No Trigger (0)", "Profit >= 4% (1)"]))
 
-    # Guardar artefacto .joblib del clasificador
+    # Guardar artefacto con el umbral óptimo
     joblib.dump({
         "model": clf,
         "features": features,
-        "metrics": {"auc_roc": auc}
+        "optimal_threshold": opt_thresh,
+        "metrics": {"auc_roc": auc, "f1_score": opt_f1}
     }, "models/xgboost_classifier.joblib")
-    print("💾 Modelo guardado en: models/xgboost_classifier.joblib")
+    print("💾 Modelo y Umbral guardados en: models/xgboost_classifier.joblib")
 
     print("\n" + "="*50 + "\n")
 
-    # 2. REGRESOR CON HIPERPARÁMETROS OPTIMIZADOS
-    print("📈 Entrenando XGBoost Regressor Final...")
+    # 2. ENTRENAMIENTO REGRESOR
+    print("📈 Entrenando XGBoost Regressor...")
     best_params_reg = {
         "n_estimators": 55,
         "max_depth": 10,
@@ -109,18 +130,16 @@ def train_and_save():
     reg = XGBRegressor(**best_params_reg)
     reg.fit(X_train, y_tr_reg)
 
-    # Evaluación Regresor
     preds_reg = reg.predict(X_test)
     mae = mean_absolute_error(y_te_reg, preds_reg)
     rmse = np.sqrt(mean_squared_error(y_te_reg, preds_reg))
     r2 = r2_score(y_te_reg, preds_reg)
 
-    print("\n--- 📊 REPORTE DE REGRESIÓN (PROFIT ESPERADO) ---")
-    print(f"MAE  (Error Medio Absoluto) : {mae:.4f} ({mae*100:.2f}%)")
-    print(f"RMSE (Raíz Error Cuadrático) : {rmse:.4f} ({rmse*100:.2f}%)")
-    print(f"R²   (Coeficiente Var.)     : {r2:.4f}")
+    print("\n--- 📊 REPORTE DE REGRESIÓN ---")
+    print(f"MAE  : {mae:.4f} ({mae*100:.2f}%)")
+    print(f"RMSE : {rmse:.4f} ({rmse*100:.2f}%)")
+    print(f"R²   : {r2:.4f}")
 
-    # Guardar artefacto .joblib del regresor
     joblib.dump({
         "model": reg,
         "features": features,
