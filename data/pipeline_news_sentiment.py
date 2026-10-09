@@ -17,7 +17,7 @@ class FinancialNewsFetcher:
     # URL oficial corregida (nasdaq_exteral_data.csv)
     FNSPID_URL: str = (
         "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/"
-        "Stock_news/nasdaq_external_data.csv"
+        "Stock_news/nasdaq_exteral_data.csv"
     )
 
     def __init__(self, target_tickers: List[str]) -> None:
