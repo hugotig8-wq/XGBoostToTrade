@@ -103,7 +103,7 @@ def main() -> None:
     df_fibo = engineer.compute_fibonacci_features(df_ewo)
     df_dataset = engineer.compute_target_and_lags(df_fibo)
 
-    output_path = "data/parquet/ml_ready_dataset.parquet"
+    output_path = "../data/parquet/ml_ready_dataset.parquet"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_dataset.write_parquet(output_path, compression="snappy")
 
