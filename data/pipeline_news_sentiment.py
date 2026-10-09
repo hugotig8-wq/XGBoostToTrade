@@ -98,7 +98,7 @@ class FinBERTSentimientoEngine:
         "negative": -1.0
     }
 
-    def __init__(self, model_name: str = "ProsusAI/finbert", batch_size: int = 32) -> None:
+    def __init__(self, model_name: str = "ProsusAI/finbert", batch_size: int = 64) -> None:
         """Inicializa el modelo de HuggingFace en GPU o CPU.
 
         Args:
@@ -114,7 +114,8 @@ class FinBERTSentimientoEngine:
             model=model_name,
             tokenizer=model_name,
             device=self.device,
-            return_all_scores=False
+            return_all_scores=False,
+            batch_size=batch_size
         )
 
     def analyze_texts(self, df_news: pl.DataFrame) -> pl.DataFrame:
