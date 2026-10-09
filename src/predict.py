@@ -8,7 +8,7 @@ import joblib
 import polars as pl
 
 
-def predict_latest_opportunity(data_path: str = "data/parquet/ml_ready_dataset_enhanced.parquet"):
+def predict_latest_opportunity(data_path: str = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"):
     # Cargar los artefactos desde .joblib
     clf_artifact = joblib.load("models/xgboost_classifier.joblib")
     reg_artifact = joblib.load("models/xgboost_regressor.joblib")
