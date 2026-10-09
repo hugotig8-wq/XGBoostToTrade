@@ -1,7 +1,7 @@
 """
-Pipeline de Sentimiento Cripto Optimizado.
-Utiliza un dataset de noticias/tweets financieros de alta densidad para criptoactivos,
-limita a 10,000 registros por activo con Polars Lazy y ejecuta ProsusAI/finbert.
+Pipeline de Sentimiento NATIVO Crypto.
+Descarga noticias masivas sobre Bitcoin, Ethereum y Altcoins desde HuggingFace,
+aplica filtrado perezoso con Polars Lazy y procesa con ProsusAI/finbert.
 """
 
 import os
@@ -11,9 +11,9 @@ from datasets import load_dataset
 from transformers import pipeline
 from tqdm import tqdm
 
-OUTPUT_PARQUET_PATH = "data/parquet/crypto_sentiment_features.parquet"
+OUTPUT_PARQUET_PATH = "data/parquet/sentiment_features.parquet"
 
-# Tickers y palabras clave asociadas
+# Mapeo de activos crypto y términos asociados
 TARGET_ASSETS = {
     "BTC": ["BITCOIN", "BTC"],
     "ETH": ["ETHEREUM", "ETHER", "ETH"],
@@ -27,7 +27,9 @@ MAX_NEWS_PER_ASSET = 10000
 
 
 def extract_crypto_asset(text: str) -> str:
-    """Mapea el texto con el criptoactivo correspondiente."""
+    """Identifica la criptomoneda en el texto."""
+    if not text:
+        return "UNKNOWN"
     text_upper = text.upper()
     for symbol, keywords in TARGET_ASSETS.items():
         for kw in keywords:
@@ -39,20 +41,31 @@ def extract_crypto_asset(text: str) -> str:
 def run_pipeline():
     os.makedirs("data/parquet", exist_ok=True)
     
-    print("1. Cargando conjunto de datos financiero/cripto desde HuggingFace...")
-    # Cargar dataset con alta cobertura de mercado y criptos
-    dataset = load_dataset("zeroshot/twitter-financial-news-sentiment", split="train")
+    print("1. Cargando conjunto de datos NATIVO DE CRYPTO desde HuggingFace...")
+    # Dataset masivo dedicado a noticias de Criptomonedas
+    try:
+        dataset = load_dataset("ElKev/crypto-news-sentiment", split="train")
+    except Exception:
+        # Source secundario masivo de crypto
+        dataset = load_dataset("m-a-p/crypto_news", split="train")
     
     df_raw = pl.from_pandas(dataset.to_pandas())
     print(f"   📊 Registros brutos descargados: {len(df_raw)}")
 
-    # Normalizar columna de texto
-    text_col = "text" if "text" in df_raw.columns else "input"
+    # Identificar columna de texto automáticamente
+    text_col = None
+    for col in ["text", "title", "headline", "input", "news"]:
+        if col in df_raw.columns:
+            text_col = col
+            break
 
-    # 2. FILTRADO Y MAPEO DE CRIPTOACTIVOS CON POLARS
-    print("2. Filtrando y mapeando criptoactivos con Polars Lazy...")
+    if not text_col:
+        text_col = df_raw.columns[0]
+
+    # 2. MAPEO Y FILTRADO LAZY CON POLARS
+    print("2. Procesando y clasificando noticias por criptoactivo con Polars...")
     
-    texts_raw = df_raw[text_col].to_list()
+    texts_raw = df_raw[text_col].cast(pl.Utf8).fill_null("").to_list()
     asset_labels = [extract_crypto_asset(t) for t in texts_raw]
 
     df_mapped = df_raw.with_columns([
@@ -60,7 +73,7 @@ def run_pipeline():
         pl.Series("ticker", asset_labels)
     ]).filter(pl.col("ticker") != "UNKNOWN")
 
-    # Limitar a máximo 10,000 noticias por cada activo
+    # Limitar a máximo 10,000 por activo
     df_filtered = (
         df_mapped.lazy()
         .unique(subset=["input_text"])
@@ -70,25 +83,25 @@ def run_pipeline():
         .collect()
     )
 
-    print(f"   🎯 Total de noticias cripto encontradas: {len(df_filtered)}")
+    print(f"   🎯 Total de noticias crypto relevantes encontradas: {len(df_filtered)}")
     counts = df_filtered.group_by("ticker").len()
     for row in counts.iter_rows():
         print(f"      - {row[0]}: {row[1]} noticias")
 
     if len(df_filtered) == 0:
-        print("⚠️ No se encontraron suficientes registros para los criptoactivos seleccionados.")
+        print("⚠️ No se encontraron suficientes coincidencia de activos en el dataset.")
         return
 
     texts = df_filtered["input_text"].to_list()
     tickers = df_filtered["ticker"].to_list()
 
-    # 3. INFERENCIA CON MODELO OFICIAL PROSUSAI/FINBERT
-    print("3. Cargando modelo ProsusAI/finbert (batch_size=64)...")
+    # 3. INFERENCIA CON PROSUSAI/FINBERT
+    print("3. Ejecutando inferencia de sentimiento con ProsusAI/finbert (batch_size=64)...")
     
     sentiment_pipeline = pipeline(
         "text-classification",
         model="ProsusAI/finbert",
-        device=-1,       # Ejecución en CPU
+        device=-1,
         batch_size=64
     )
 
@@ -99,14 +112,23 @@ def run_pipeline():
     labels = [res["label"] for res in results]
     confidences = [res["score"] for res in results]
 
-    # ProsusAI/finbert mapea las etiquetas como 'positive', 'neutral', 'negative'
     label_map = {"positive": 1.0, "neutral": 0.0, "negative": -1.0}
     sentiment_scores = [label_map.get(lbl.lower(), 0.0) * conf for lbl, conf in zip(labels, confidences)]
 
     # 4. AGREGACIÓN Y EXPORTACIÓN A PARQUET
     print("4. Agregando métricas diarias por criptoactivo...")
 
-    dates = ["2024-01-01"] * len(df_filtered)
+    # Capturar columna de fecha si existe
+    date_col = None
+    for col in ["date", "created_at", "time", "timestamp"]:
+        if col in df_filtered.columns:
+            date_col = col
+            break
+
+    if date_col:
+        dates = df_filtered[date_col].cast(pl.Utf8).str.slice(0, 10).to_list()
+    else:
+        dates = ["2024-01-01"] * len(df_filtered)
 
     df_sentiment = pl.DataFrame({
         "date": dates,
@@ -128,8 +150,8 @@ def run_pipeline():
     )
 
     df_daily.write_parquet(OUTPUT_PARQUET_PATH)
-    print(f"✅ Inferencia finalizada correctamente.")
-    print(f"💾 Guardado en: {OUTPUT_PARQUET_PATH}")
+    print(f"✅ Inferencia finalizada con éxito.")
+    print(f"💾 Guardado en: {OUTPUT_PARQUET_PATH} ({len(df_daily)} filas agregadas)")
 
 
 if __name__ == "__main__":
