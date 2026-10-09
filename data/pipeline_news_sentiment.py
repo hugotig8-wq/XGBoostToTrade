@@ -27,7 +27,7 @@ class FinancialNewsFetcher:
         """
         self.target_tickers = target_tickers
 
-    def fetch_filtered_news(self, max_records_per_ticker: Optional[int] = 5000) -> pl.DataFrame:
+    def fetch_filtered_news(self, max_records_per_ticker: Optional[int] = 20000) -> pl.DataFrame:
         """Lee el dataset masivo desde HuggingFace mediante Polars LazyFrame (Streaming).
 
         Args:
@@ -152,7 +152,7 @@ class DailySentimentAggregator:
     @staticmethod
     def aggregate_and_save(
         df_analyzed: pl.DataFrame,
-        output_parquet_path: str = "data/parquet/sentiment_features.parquet"
+        output_parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/sentiment_features.parquet"
     ) -> pl.DataFrame:
         """Agrupa los resultados por fecha y ticker y exporta a Parquet.
 
@@ -193,7 +193,7 @@ def main() -> None:
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"]
 
     fetcher = FinancialNewsFetcher(target_tickers=tickers)
-    df_news = fetcher.fetch_filtered_news(max_records_per_ticker=2000)
+    df_news = fetcher.fetch_filtered_news(max_records_per_ticker=20000)
 
     if not df_news.is_empty():
         engine = FinBERTSentimientoEngine(batch_size=32)
