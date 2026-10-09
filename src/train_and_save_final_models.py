@@ -1,6 +1,6 @@
 """
 Módulo de Entrenamiento Final con Calibración Equilibrada de Umbral (Macro F1).
-Evita que el modelo colapse prediciendo solo una clase.
+Actualizado con los mejores hiperparámetros de Optuna para el sector de Energía.
 """
 
 import os
@@ -50,10 +50,8 @@ def find_best_threshold_macro(y_true, y_probs):
     best_thresh = 0.50
     best_f1 = 0.0
 
-    # Rango acotado para evitar colapsar en predicciones de una sola clase
     for thresh in np.arange(0.40, 0.62, 0.02):
         preds = (y_probs >= thresh).astype(int)
-        # Macro F1 evalúa ambas clases (0 y 1) por igual
         score = f1_score(y_true, preds, average="macro", zero_division=0)
         if score > best_f1:
             best_f1 = score
@@ -68,16 +66,16 @@ def train_and_save():
 
     print(f"📦 Features de entrada ({len(features)}): {features}\n")
 
-    # 1. ENTRENAMIENTO CLASIFICADOR (Con hiperparámetros equilibrados de TimeSeriesSplit)
+    # 1. ENTRENAMIENTO CLASIFICADOR (Hiperparámetros optimizados para Energía)
     print("🤖 Entrenando XGBoost Classifier...")
     best_params_cls = {
-        "n_estimators": 109,
-        "max_depth": 6,
-        "learning_rate": 0.01218,
-        "subsample": 0.5756,
-        "colsample_bytree": 0.5835,
-        "gamma": 4.8335,
-        "scale_pos_weight": 1.0,  # Restablecido a 1.0 para mantener neutralidad
+        "n_estimators": 108,
+        "max_depth": 3,
+        "learning_rate": 0.017776678919499442,
+        "subsample": 0.6932570099251064,
+        "colsample_bytree": 0.5669443503624285,
+        "gamma": 3.081807409108504,
+        "scale_pos_weight": 0.9050403223085925,
         "random_state": 42,
         "eval_metric": "logloss"
     }
@@ -85,10 +83,8 @@ def train_and_save():
     clf = XGBClassifier(**best_params_cls)
     clf.fit(X_train, y_tr_cls)
 
-    # Probabilidades continuas [:, 1]
     probs_cls = clf.predict_proba(X_test)[:, 1]
 
-    # Búsqueda de umbral óptimo equilibrado
     opt_thresh, opt_f1_macro = find_best_threshold_macro(y_te_cls, probs_cls)
     preds_opt = (probs_cls >= opt_thresh).astype(int)
 
@@ -105,7 +101,6 @@ def train_and_save():
     print("\nMétricas detalladas con umbral óptimo:")
     print(classification_report(y_te_cls, preds_opt, target_names=["No Trigger (0)", "Profit >= 4% (1)"]))
 
-    # Guardar artefacto
     joblib.dump({
         "model": clf,
         "features": features,
@@ -150,4 +145,4 @@ def train_and_save():
 
 if __name__ == "__main__":
     train_and_save()
-        
+    
