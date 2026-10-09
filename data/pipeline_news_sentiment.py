@@ -14,6 +14,7 @@ from transformers import pipeline
 class FinancialNewsFetcher:
     """Encargado de la descarga y filtrado de noticias históricas reales."""
 
+    # URL oficial corregida (nasdaq_exteral_data.csv)
     FNSPID_URL: str = (
         "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/"
         "Stock_news/nasdaq_external_data.csv"
@@ -43,12 +44,13 @@ class FinancialNewsFetcher:
             lazy_df = pl.scan_csv(self.FNSPID_URL, ignore_errors=True)
 
             # Filtrar por los tickers requeridos y seleccionar columnas relevantes
+            # En el CSV del FNSPID, la columna de ticker es 'Stock_symbol'
             df_filtered = (
                 lazy_df
-                .filter(pl.col("Ticker").is_in(self.target_tickers))
+                .filter(pl.col("Stock_symbol").is_in(self.target_tickers))
                 .select([
                     pl.col("Date").alias("raw_date"),
-                    pl.col("Ticker").alias("ticker"),
+                    pl.col("Stock_symbol").alias("ticker"),
                     pl.col("Article_title").alias("text")
                 ])
                 .collect(engine="streaming")
@@ -214,4 +216,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-        
+            
