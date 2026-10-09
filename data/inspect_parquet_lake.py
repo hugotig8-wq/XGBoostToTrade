@@ -4,7 +4,7 @@ Módulo de inspección rápida del Data Lake en Parquet usando Polars.
 
 import polars as pl
 
-def inspect_parquet_lake(file_path: str = "data/parquet/financial_data.parquet") -> None:
+def inspect_parquet_lake(file_path: str = "./parquet/financial_data.parquet") -> None:
     """Lee y valida la integridad del archivo Parquet procesado."""
     print("Cargando dataset con Polars...")
     
