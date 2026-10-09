@@ -13,8 +13,8 @@ class FinancialFeatureEngineer:
 
     def __init__(
         self,
-        prices_parquet_path: str = "../data/parquet/financial_data.parquet",
-        sentiment_parquet_path: str = "../data/data/parquet/sentiment_features.parquet"
+        prices_parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/financial_data.parquet",
+        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/data/data/parquet/sentiment_features.parquet"
     ) -> None:
         self.prices_path = prices_parquet_path
         self.sentiment_path = sentiment_parquet_path
@@ -47,9 +47,6 @@ class FinancialFeatureEngineer:
         """Calcula el Oscilador de Ondas de Elliott (EWO = SMA_5 - SMA_35)."""
         print("3. Calculando el Oscilador de Ondas de Elliott (EWO)...")
         df_ewo = df.with_columns([
-            pl.col("close").apply_many(
-                lambda s: s, return_dtype=pl.Float64
-            ) if False else 
             (
                 pl.col("close").rolling_mean(window_size=5).over("ticker") - 
                 pl.col("close").rolling_mean(window_size=35).over("ticker")
@@ -91,7 +88,7 @@ class FinancialFeatureEngineer:
             # Promedios móviles de sentimiento a 3 y 7 días
             pl.col("daily_sentiment_score").rolling_mean(window_size=3).over("ticker").alias("sentiment_ma_3"),
             pl.col("daily_sentiment_score").rolling_mean(window_size=7).over("ticker").alias("sentiment_ma_7")
-        ]).dropna()  # Elimina filas iniciales/finales generadas por ventanas flotantes
+        ]).drop_nulls()  # <-- SINTAXIS OFICIAL POLARS (drop_nulls en lugar de dropna)
         
         return df_final
 
@@ -103,7 +100,7 @@ def main() -> None:
     df_fibo = engineer.compute_fibonacci_features(df_ewo)
     df_dataset = engineer.compute_target_and_lags(df_fibo)
 
-    output_path = "../data/parquet/ml_ready_dataset.parquet"
+    output_path = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset.parquet"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_dataset.write_parquet(output_path, compression="snappy")
 
@@ -119,4 +116,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-      
+        
