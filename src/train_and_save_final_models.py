@@ -19,7 +19,7 @@ from sklearn.metrics import (
 )
 
 
-def load_data(parquet_path: str = "data/parquet/ml_ready_dataset_enhanced.parquet"):
+def load_data(parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"):
     """Carga y divide los datos de forma temporal."""
     df = pl.read_parquet(parquet_path).sort("date")
 
@@ -86,7 +86,7 @@ def train_and_save():
         "model": clf,
         "features": features,
         "metrics": {"auc_roc": auc}
-    }, "models/xgboost_classifier.joblib")
+    }, "/workspaces/XGBoostToTrade/models/xgboost_classifier.joblib")
     print("💾 Modelo guardado en: models/xgboost_classifier.joblib")
 
     print("\n" + "="*50 + "\n")
@@ -121,7 +121,7 @@ def train_and_save():
         "model": reg,
         "features": features,
         "metrics": {"mae": mae, "rmse": rmse, "r2": r2}
-    }, "models/xgboost_regressor.joblib")
+    }, "/workspaces/XGBoostToTrade/models/xgboost_regressor.joblib")
     print("💾 Modelo guardado en: models/xgboost_regressor.joblib")
 
 
