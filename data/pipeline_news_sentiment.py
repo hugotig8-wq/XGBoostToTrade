@@ -12,7 +12,7 @@ from transformers import pipeline
 
 
 class FinancialNewsFetcher:
-    """Encargado de la descarga y filtrado de noticias históricas reales (2020-2024)."""
+    """Encargado de la descarga y filtrado de noticias históricas reales."""
 
     FNSPID_URL: str = (
         "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/"
@@ -31,7 +31,7 @@ class FinancialNewsFetcher:
         """Lee el dataset masivo desde HuggingFace mediante Polars LazyFrame (Streaming).
 
         Args:
-            max_records_per_ticker (Optional[int]): Límite de noticias por ticker para optimizar tiempo.
+            max_records_per_ticker (Optional[int]): Límite de noticias por ticker.
 
         Returns:
             pl.DataFrame: DataFrame con noticias reales filtradas.
@@ -51,7 +51,7 @@ class FinancialNewsFetcher:
                     pl.col("Ticker").alias("ticker"),
                     pl.col("Article_title").alias("text")
                 ])
-                .collect(streaming=True)
+                .collect(engine="streaming")
             )
 
             if df_filtered.is_empty():
@@ -214,4 +214,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-                  
+        
