@@ -14,7 +14,6 @@ from transformers import pipeline
 class FinancialNewsFetcher:
     """Encargado de la descarga y filtrado de noticias históricas reales."""
 
-    # URL oficial corregida (nasdaq_exteral_data.csv)
     FNSPID_URL: str = (
         "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/"
         "Stock_news/nasdaq_exteral_data.csv"
@@ -40,11 +39,8 @@ class FinancialNewsFetcher:
         print("1. Iniciando descarga/filtrado de noticias reales desde HuggingFace (FNSPID)...")
 
         try:
-            # Uso de scan_csv para procesamiento perezoso (sin cargar todo a la RAM)
             lazy_df = pl.scan_csv(self.FNSPID_URL, ignore_errors=True)
 
-            # Filtrar por los tickers requeridos y seleccionar columnas relevantes
-            # En el CSV del FNSPID, la columna de ticker es 'Stock_symbol'
             df_filtered = (
                 lazy_df
                 .filter(pl.col("Stock_symbol").is_in(self.target_tickers))
@@ -60,21 +56,24 @@ class FinancialNewsFetcher:
                 print("⚠️ No se encontraron noticias para los tickers especificados.")
                 return pl.DataFrame()
 
-            # Normalización y cast de fechas
+            # Normalización robusta de fechas con fallback a string slicing
             df_cleaned = (
                 df_filtered
                 .with_columns(
                     pl.col("raw_date")
-                    .str.to_datetime("%Y-%m-%d %H:%M:%S", strict=False)
-                    .dt.date()
+                    .str.slice(0, 10)
+                    .str.to_date("%Y-%m-%d", strict=False)
                     .alias("date")
                 )
                 .drop("raw_date")
-                .filter(pl.col("text").is_not_null() & (pl.col("text").str.len_bytes() > 10))
+                .filter(
+                    pl.col("date").is_not_null() & 
+                    pl.col("text").is_not_null() & 
+                    (pl.col("text").str.len_bytes() > 10)
+                )
                 .unique(subset=["date", "ticker", "text"])
             )
 
-            # Muestreo controlado si excede el límite
             if max_records_per_ticker:
                 df_cleaned = (
                     df_cleaned
@@ -130,15 +129,12 @@ class FinBERTSentimientoEngine:
         texts = df_news["text"].to_list()
         print(f"3. Iniciando inferencia FinBERT sobre {len(texts)} titulares (Batch Size: {self.batch_size})...")
 
-        # Inferencia optimizada en lotes
         raw_outputs: List[Dict[str, Any]] = self.pipe(texts, batch_size=self.batch_size)
 
-        # Mapeo numérico y extracción
         labels = [res["label"].lower() for res in raw_outputs]
         confidences = [float(res["score"]) for res in raw_outputs]
         raw_values = [self.LABEL_MAPPING.get(lbl, 0.0) for lbl in labels]
 
-        # Creación de columnas de sentimiento
         df_analyzed = df_news.with_columns([
             pl.Series("sentiment_label", labels, dtype=pl.Utf8),
             pl.Series("confidence_score", confidences, dtype=pl.Float32),
@@ -180,7 +176,6 @@ class DailySentimentAggregator:
             .sort(["ticker", "date"])
         )
 
-        # Crear directorio y guardar Parquet
         os.makedirs(os.path.dirname(output_parquet_path), exist_ok=True)
         df_daily.write_parquet(output_parquet_path, compression="snappy")
 
@@ -195,19 +190,15 @@ class DailySentimentAggregator:
 
 def main() -> None:
     """Ejecución principal del pipeline."""
-    # Tickers de interés para el proyecto de inversión
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"]
 
-    # 1. Extracción de noticias reales
     fetcher = FinancialNewsFetcher(target_tickers=tickers)
     df_news = fetcher.fetch_filtered_news(max_records_per_ticker=2000)
 
     if not df_news.is_empty():
-        # 2. Inferencia NLP FinBERT
         engine = FinBERTSentimientoEngine(batch_size=32)
         df_analyzed = engine.analyze_texts(df_news)
 
-        # 3. Postprocesamiento y exportación Parquet
         df_daily_features = DailySentimentAggregator.aggregate_and_save(df_analyzed)
 
         print("\nMuestra del dataset final de sentimiento (Parquet):")
@@ -216,4 +207,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-            
+        
