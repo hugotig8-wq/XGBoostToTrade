@@ -77,7 +77,7 @@ class SentimentPostProcessor:
 def run_postprocessing_pipeline(
     df_clean: pl.DataFrame, 
     results: List[Dict[str, Any]], 
-    output_parquet_path: str = "data/parquet/sentiment_features.parquet"
+    output_parquet_path: str = "./parquet/sentiment_features.parquet"
 ) -> pl.DataFrame:
     """Ejecuta la estructuración, agregación diaria y guardado final en formato Parquet."""
     print("Iniciando postprocesamiento de resultados de sentimiento...")
@@ -105,7 +105,7 @@ def run_postprocessing_pipeline(
 
 if __name__ == "__main__":
     # Lectura eficiente
-    df = pl.read_parquet("parquet/financial_data.parquet")
+    df = pl.read_parquet("./parquet/financial_data.parquet")
 
     # Limpieza inicial
     df_clean = df.filter(
