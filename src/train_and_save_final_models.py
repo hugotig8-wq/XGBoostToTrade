@@ -126,5 +126,9 @@ def train_and_save():
         "features": features,
         "metrics": {"mae": mae, "rmse": rmse, "r2": r2}
     }, "models/xgboost_regressor.joblib")
-    print("💾 Modelo
+    print("💾 Modelo guardado en: models/xgboost_regressor.joblib")
+
+
+if __name__ == "__main__":
+    train_and_save()
     
