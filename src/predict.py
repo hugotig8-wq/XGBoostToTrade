@@ -36,7 +36,10 @@ def predict_latest_opportunity(data_path: str = "/workspaces/XGBoostToTrade/data
     ])
 
     print("🚀 --- PREDICCIONES GENERADAS EN TIEMPO REAL ---")
-    print(results)
+    # Reemplazar el print final en src/predict.py por:
+    with pl.Config(tbl_width_chars=200, tbl_formatting="ASCII_FULL_CONDENSED"):
+        print(results)
+    
 
 
 if __name__ == "__main__":
