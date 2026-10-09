@@ -1,6 +1,6 @@
-
 """
 Módulo de Fusión y Feature Engineering Avanzado con Target de Profit Futuro (Elliott Wave Strategy).
+Compatible con Polars 2.0+ (.str.to_date) y con soporte completo para Ondas de Elliott y Fibonacci.
 """
 
 import os
@@ -11,14 +11,21 @@ class FinancialFeatureEngineer:
     def __init__(
         self,
         prices_parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/market_data.parquet",
-        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/data/data/parquet/sentiment_features.parquet"
+        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/sentiment_features.parquet"
     ) -> None:
         self.prices_path = prices_parquet_path
         self.sentiment_path = sentiment_parquet_path
 
     def load_and_fuse_data(self) -> pl.DataFrame:
-        df_prices = pl.read_parquet(self.prices_path).with_columns(pl.col("date").cast(pl.Date))
-        df_sentiment = pl.read_parquet(self.sentiment_path).with_columns(pl.col("date").cast(pl.Date))
+        print("1. Cargando y fusionando datos de mercado con sentimiento de noticias...")
+        
+        # Corrección de Polars 2.0: Conversión explícita usando .str.to_date()
+        df_prices = pl.read_parquet(self.prices_path).with_columns(
+            pl.col("date").str.to_date("%Y-%m-%d")
+        )
+        df_sentiment = pl.read_parquet(self.sentiment_path).with_columns(
+            pl.col("date").str.to_date("%Y-%m-%d")
+        )
 
         df_fused = df_prices.join(
             df_sentiment,
@@ -33,6 +40,11 @@ class FinancialFeatureEngineer:
         return df_fused
 
     def compute_elliott_wave_oscillator(self, df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Calcula el Oscilador de Ondas de Elliott (EWO = SMA(5) - SMA(35))
+        y su ratio sobre el precio de cierre para identificar la Onda 3 y 5.
+        """
+        print("2. Calculando Oscilador de Ondas de Elliott (EWO)...")
         df_ewo = df.with_columns([
             (
                 pl.col("close").rolling_mean(window_size=5).over("ticker") - 
@@ -44,7 +56,11 @@ class FinancialFeatureEngineer:
         return df_ewo
 
     def compute_fibonacci_features(self, df: pl.DataFrame, lookback_window: int = 20) -> pl.DataFrame:
-        """Extrae la estructura pasada de 20 días para determinar la posición en la Onda."""
+        """
+        Extrae el rango de precio a 20 días para determinar zonas clave de retroceso
+        de Fibonacci (38.2%, 50.0% y 61.8%) y posición dentro del impulso.
+        """
+        print(f"3. Calculando niveles de Retroceso de Fibonacci (Ventana: {lookback_window}d)...")
         df_fibo = df.with_columns([
             pl.col("high").rolling_max(window_size=lookback_window).over("ticker").alias("rolling_high_20"),
             pl.col("low").rolling_min(window_size=lookback_window).over("ticker").alias("rolling_low_20")
@@ -70,9 +86,9 @@ class FinancialFeatureEngineer:
         - forward_max_profit: % máximo de rendimiento alcanzable desde el Cierre t.
         - target_high_profit: 1 si el máximo profit es >= threshold (ej. 4%), 0 de lo contrario.
         """
-        print(f"5. Calculando Forward Max Profit (Horizonte futuro: {forward_horizon}d)...")
+        print(f"4. Calculando Forward Max Profit (Horizonte futuro: {forward_horizon}d)...")
         
-        # Invertimos temporalmente el dataframe por ticker para calcular maximos hacia adelante
+        # Invertimos temporalmente el dataframe por ticker para calcular máximos hacia adelante
         df_target = df.reverse().with_columns([
             pl.col("high").shift(1).rolling_max(window_size=forward_horizon).over("ticker").alias("forward_max_high")
         ]).reverse()
@@ -98,7 +114,7 @@ def main() -> None:
     # Horizonte futuro de 10 días hábiles con meta de profit del 4%
     df_dataset = engineer.compute_forward_profit_target(df_fibo, forward_horizon=10, profit_threshold=0.04)
 
-    output_path = "/workspaces/XGBoostToTrade/data/parquet/ener_ml_ready_dataset.parquet"
+    output_path = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_dataset.write_parquet(output_path, compression="snappy")
 
