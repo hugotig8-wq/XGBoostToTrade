@@ -11,7 +11,7 @@ from datasets import load_dataset
 from transformers import pipeline
 from tqdm import tqdm
 
-OUTPUT_PARQUET_PATH = "data/parquet/sentiment_features.parquet"
+OUTPUT_PARQUET_PATH = "data/parquet/crypto_sentiment_features.parquet"
 
 # Mapeo de activos crypto y términos asociados
 TARGET_ASSETS = {
