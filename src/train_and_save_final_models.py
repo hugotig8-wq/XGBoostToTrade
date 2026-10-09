@@ -1,7 +1,7 @@
 """
 Módulo de Entrenamiento Final y Exportación de Artefactos (.joblib).
-Entrena los modelos de Clasificación y Regresión con los mejores hiperparámetros
-obtenidos por el agente optimizador y los guarda para el pipeline de inferencia/producción.
+Entrena los modelos con los hiperparámetros óptimos validados con TimeSeriesSplit
+y guarda los artefactos ejecutables en la carpeta models/.
 """
 
 import os
@@ -18,9 +18,11 @@ from sklearn.metrics import (
     r2_score
 )
 
+DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"
 
-def load_data(parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"):
-    """Carga y divide los datos de forma temporal."""
+
+def load_data(parquet_path: str = DATASET_PATH):
+    """Carga y divide los datos de forma temporal manteniendo el orden cronológico."""
     df = pl.read_parquet(parquet_path).sort("date")
 
     ignore_cols = [
@@ -29,6 +31,7 @@ def load_data(parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/ml_re
     ]
     features = [c for c in df.columns if c not in ignore_cols]
 
+    # Split 80% Train, 20% Test
     split_idx = int(len(df) * 0.8)
     train_df, test_df = df[:split_idx], df[split_idx:]
 
@@ -50,15 +53,16 @@ def train_and_save():
 
     print(f"📦 Features de entrada ({len(features)}): {features}\n")
 
-    # 1. ENTRENAR CLASIFICADOR CON HIPERPARÁMETROS OPTIMIZADOS
+    # 1. CLASIFICADOR CON HIPERPARÁMETROS ÓPTIMOS DE TIME-SERIES CROSS-VALIDATION
     print("🤖 Entrenando XGBoost Classifier Final...")
     best_params_cls = {
-        "n_estimators": 256,
-        "max_depth": 4,
-        "learning_rate": 0.01192,
-        "subsample": 0.6096,
-        "colsample_bytree": 0.7025,
-        "gamma": 2.4585,
+        "n_estimators": 109,
+        "max_depth": 6,
+        "learning_rate": 0.01218,
+        "subsample": 0.5756,
+        "colsample_bytree": 0.5835,
+        "gamma": 4.8335,
+        "scale_pos_weight": 0.8607,
         "random_state": 42,
         "eval_metric": "logloss"
     }
@@ -81,17 +85,17 @@ def train_and_save():
     print("\nMétricas detalladas:")
     print(classification_report(y_te_cls, preds_cls, target_names=["No Trigger (0)", "Profit >= 4% (1)"]))
 
-    # Guardar modelo e hiperparámetros/features
+    # Guardar artefacto .joblib del clasificador
     joblib.dump({
         "model": clf,
         "features": features,
         "metrics": {"auc_roc": auc}
-    }, "/workspaces/XGBoostToTrade/models/xgboost_classifier.joblib")
+    }, "models/xgboost_classifier.joblib")
     print("💾 Modelo guardado en: models/xgboost_classifier.joblib")
 
     print("\n" + "="*50 + "\n")
 
-    # 2. ENTRENAR REGRESOR CON HIPERPARÁMETROS OPTIMIZADOS
+    # 2. REGRESOR CON HIPERPARÁMETROS OPTIMIZADOS
     print("📈 Entrenando XGBoost Regressor Final...")
     best_params_reg = {
         "n_estimators": 55,
@@ -116,15 +120,11 @@ def train_and_save():
     print(f"RMSE (Raíz Error Cuadrático) : {rmse:.4f} ({rmse*100:.2f}%)")
     print(f"R²   (Coeficiente Var.)     : {r2:.4f}")
 
-    # Guardar modelo
+    # Guardar artefacto .joblib del regresor
     joblib.dump({
         "model": reg,
         "features": features,
         "metrics": {"mae": mae, "rmse": rmse, "r2": r2}
-    }, "/workspaces/XGBoostToTrade/models/xgboost_regressor.joblib")
-    print("💾 Modelo guardado en: models/xgboost_regressor.joblib")
-
-
-if __name__ == "__main__":
-    train_and_save()
-  
+    }, "models/xgboost_regressor.joblib")
+    print("💾 Modelo
+    
