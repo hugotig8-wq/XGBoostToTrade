@@ -105,7 +105,7 @@ def run_postprocessing_pipeline(
 
 if __name__ == "__main__":
     # Lectura eficiente
-    df = pl.read_parquet("financial_data.parquet")
+    df = pl.read_parquet("parquet/financial_data.parquet")
 
     # Limpieza inicial
     df_clean = df.filter(
