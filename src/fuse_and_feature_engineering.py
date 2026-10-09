@@ -10,8 +10,8 @@ import polars as pl
 class FinancialFeatureEngineer:
     def __init__(
         self,
-        prices_parquet_path: str = "data/parquet/financial_data.parquet",
-        sentiment_parquet_path: str = "data/parquet/sentiment_features.parquet"
+        prices_parquet_path: str = "/workspaces/XGBoostToTrade/data/parquet/financial_data.parquet",
+        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/data/data/parquet/sentiment_features.parquet"
     ) -> None:
         self.prices_path = prices_parquet_path
         self.sentiment_path = sentiment_parquet_path
@@ -98,7 +98,7 @@ def main() -> None:
     # Horizonte futuro de 10 días hábiles con meta de profit del 4%
     df_dataset = engineer.compute_forward_profit_target(df_fibo, forward_horizon=10, profit_threshold=0.04)
 
-    output_path = "data/parquet/ml_ready_dataset.parquet"
+    output_path = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset.parquet"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_dataset.write_parquet(output_path, compression="snappy")
 
