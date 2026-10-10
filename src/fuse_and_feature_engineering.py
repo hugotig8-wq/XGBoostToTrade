@@ -7,9 +7,9 @@ ondas de Elliott y retrocesos de Fibonacci de forma compatible con Polars modern
 import os
 import polars as pl
 
-MARKET_DATA_PATH = "/workspace/XGBoostToTrade/ColectorAgent/data/parquet/market_historical_data.parquet"
-SENTIMENT_DATA_PATH = "/workspace/XGBoostToTrade/ColectorAgent/data/parquet/crypto_sentiment_features.parquet"
-OUTPUT_DATASET_PATH = "/workspace/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced.parquet"
+MARKET_DATA_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/market_historical_data.parquet"
+SENTIMENT_DATA_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/crypto_sentiment_features.parquet"
+OUTPUT_DATASET_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced.parquet"
 
 
 def fuse_and_engineer_features() -> None:
