@@ -86,11 +86,11 @@ def add_technical_indicators(df: pl.DataFrame) -> pl.DataFrame:
 
 if __name__ == "__main__":
     # Prueba del módulo con el dataset procesado
-    df_input = pl.read_parquet("/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset.parquet")
+    df_input = pl.read_parquet("/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced.parquet")
     df_enhanced = add_technical_indicators(df_input)
     
     # Guardar versión extendida
-    df_enhanced.write_parquet("/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced.parquet")
+    df_enhanced.write_parquet("/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced2.parquet")
     
     print(f"✅ Features calculadas exitosamente. Nuevas columnas creadas:")
     print([c for c in df_enhanced.columns if c not in df_input.columns])
