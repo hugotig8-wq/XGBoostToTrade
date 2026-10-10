@@ -11,7 +11,7 @@ class FinancialFeatureEngineer:
     def __init__(
         self,
         prices_parquet_path: str = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/market_historical_data.parquet",
-        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/sentiment_features.parquet"
+        sentiment_parquet_path: str = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/crypto_sentiment_features.parquet"
     ) -> None:
         self.prices_path = prices_parquet_path
         self.sentiment_path = sentiment_parquet_path
