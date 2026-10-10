@@ -19,7 +19,7 @@ from sklearn.metrics import (
 )
 
 # Ruta absoluta al dataset enriquecido actualizado
-DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced2.parquet"
+DATASET_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced2.parquet"
 
 
 def load_data(parquet_path: str = DATASET_PATH):
