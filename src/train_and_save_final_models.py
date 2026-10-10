@@ -18,7 +18,7 @@ from sklearn.metrics import (
     r2_score
 )
 
-DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced.parquet"
+DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced2.parquet"
 
 
 def load_data(parquet_path: str = DATASET_PATH):
@@ -69,8 +69,8 @@ def train_and_save():
     # 1. ENTRENAMIENTO CLASIFICADOR (Hiperparámetros optimizados para Energía)
     print("🤖 Entrenando XGBoost Classifier...")
     best_params_cls = {
-        "n_estimators": 108,
-        "max_depth": 3,
+        "n_estimators": 247,
+        "max_depth": 4,
         "learning_rate": 0.017776678919499442,
         "subsample": 0.6932570099251064,
         "colsample_bytree": 0.5669443503624285,
