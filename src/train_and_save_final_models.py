@@ -1,6 +1,6 @@
 """
 Módulo de Entrenamiento Final con Calibración Equilibrada de Umbral (Macro F1).
-Actualizado con los mejores hiperparámetros de Optuna para el sector de Energía.
+Actualizado con los mejores hiperparámetros de Optuna para producción.
 """
 
 import os
@@ -18,10 +18,12 @@ from sklearn.metrics import (
     r2_score
 )
 
+# Ruta absoluta al dataset enriquecido actualizado
 DATASET_PATH = "/workspaces/XGBoostToTrade/data/parquet/ml_ready_dataset_enhanced2.parquet"
 
 
 def load_data(parquet_path: str = DATASET_PATH):
+    """Carga y divide el dataset estructurado para clasificación y regresión."""
     df = pl.read_parquet(parquet_path).sort("date")
 
     ignore_cols = [
@@ -46,7 +48,7 @@ def load_data(parquet_path: str = DATASET_PATH):
 
 
 def find_best_threshold_macro(y_true, y_probs):
-    """Encuentra el umbral que maximiza el F1-Score Macro (equilibrio entre ambas clases)."""
+    """Encuentra el umbral óptimo que maximiza el F1-Score Macro."""
     best_thresh = 0.50
     best_f1 = 0.0
 
@@ -61,13 +63,14 @@ def find_best_threshold_macro(y_true, y_probs):
 
 
 def train_and_save():
+    """Ejecuta el entrenamiento, evaluación y exportación de modelos a formato joblib."""
     os.makedirs("models", exist_ok=True)
     features, X_train, X_test, y_tr_cls, y_te_cls, y_tr_reg, y_te_reg = load_data()
 
     print(f"📦 Features de entrada ({len(features)}): {features}\n")
 
-    # 1. ENTRENAMIENTO CLASIFICADOR (Hiperparámetros optimizados para Energía)
-    print("🤖 Entrenando XGBoost Classifier...")
+    # 1. ENTRENAMIENTO CLASIFICADOR (Hiperparámetros optimizados)
+    print("🤖 Entrenando XGBoost Classifier con hiperparámetros optimizados...")
     best_params_cls = {
         "n_estimators": 247,
         "max_depth": 4,
@@ -145,4 +148,4 @@ def train_and_save():
 
 if __name__ == "__main__":
     train_and_save()
-    
+        
