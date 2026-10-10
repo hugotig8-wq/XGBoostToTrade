@@ -14,7 +14,7 @@ from sklearn.metrics import roc_auc_score
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # Ruta absoluta al dataset
-DATASET_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced.parquet"
+DATASET_PATH = "/workspaces/XGBoostToTrade/ColectorAgent/data/parquet/ml_ready_dataset_enhanced2.parquet"
 
 
 def load_dataset(parquet_path: str = DATASET_PATH):
