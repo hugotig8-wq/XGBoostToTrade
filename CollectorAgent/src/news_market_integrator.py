@@ -94,19 +94,20 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Detecta máximos y mínimos relativos para identificar ondas de Elliott,
-    niveles de Fibonacci, y calcular Stop Loss / Take Profit.
+    Detecta máximos y mínimos relativos pasados para identificar ondas de Elliott,
+    niveles de Fibonacci, y calcular Stop Loss / Take Profit sin data leakage.
     """
     groups = []
     for ticker, group in df.groupby("ticker"):
         g = group.copy()
         
-        # Identificar pivotes locales (ventana de 5 periodos)
-        window = 5
-        g["is_high"] = g["high"] == g["high"].rolling(window=window*2+1, center=True).max()
-        g["is_low"] = g["low"] == g["low"].rolling(window=window*2+1, center=True).min()
+        # Corrección de Data Leakage: Quitamos center=True. 
+        # Evaluamos si la vela actual es un máximo respecto a las 10 velas PASADAS.
+        window = 10
+        g["is_past_high"] = g["high"] == g["high"].rolling(window=window, closed='right').max()
+        g["is_past_low"] = g["low"] == g["low"].rolling(window=window, closed='right').min()
         
-        # Retrocesos de Fibonacci
+        # Retrocesos de Fibonacci calculados sobre máximos y mínimos móviles pasados
         rolling_max = g["high"].rolling(window=50, min_periods=1).max()
         rolling_min = g["low"].rolling(window=50, min_periods=1).min()
         diff = rolling_max - rolling_min
@@ -116,10 +117,10 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
         g["fib_500"] = rolling_max - (diff * 0.500)
         g["fib_618"] = rolling_max - (diff * 0.618)
         
-        # Fase de Ondas de Elliott
+        # Fase de Ondas de Elliott basada en la posición actual respecto al retroceso pasado
         g["elliott_wave_phase"] = np.where(g["close"] > g["fib_382"], "Impulse_Wave_3_or_5", "Correction_Wave_2_or_4")
         
-        # Cálculo dinámico de Stop Loss y Take Profit
+        # Cálculo dinámico de Stop Loss y Take Profit utilizando el ATR pasado
         atr = g["atr_14"].fillna(g["close"] * 0.01)
         g["stop_loss"] = np.where(g["elliott_wave_phase"].str.contains("Impulse"), g["close"] - (2 * atr), g["close"] - (1.5 * atr))
         g["take_profit"] = np.where(g["elliott_wave_phase"].str.contains("Impulse"), g["close"] + (3.5 * atr), g["close"] + (2.5 * atr))
@@ -127,7 +128,6 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
         groups.append(g)
         
     return pd.concat(groups, ignore_index=True)
-
 
 def integrate_news_and_market(
     raw_parquet: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw/financial_data.parquet",
