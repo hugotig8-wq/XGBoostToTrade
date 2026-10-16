@@ -12,7 +12,7 @@ import pandas as pd
 def inspect_specific_sample(
     target_datetime: str, 
     ticker: str = None,
-    parquet_path: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw/intraday_60d_raw.parquet"
+    parquet_path: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw/financial_data.parquet"
 ) -> None:
     """
     Busca y muestra los registros del archivo Parquet para una fecha y hora específica,
