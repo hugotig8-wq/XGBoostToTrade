@@ -33,16 +33,21 @@ def load_dataset(parquet_path: str = DATASET_PATH):
         "date", "ticker", "forward_max_high", 
         "forward_max_profit", "target_high_profit", "published_at", "source_url"
     ]
-    features = [c for c in df.columns if c not in ignore_cols and pd.api.types.is_numeric_dtype(df[c])]
+    
+    # Filtrar solo columnas estrictamente numéricas para evitar errores de tipo object en XGBoost
+    numeric_cols = df.select_dtypes(include=[np.number, "float", "int", "bool"]).columns.tolist()
+    features = [c for c in numeric_cols if c not in ignore_cols]
 
     X = df[features]
     
     # Seleccionar la columna objetivo (target) disponible
     target_col = "target_high_profit" if "target_high_profit" in df.columns else df.columns[-1]
-    y = df[target_col].to_numpy()
+    
+    # Asegurar que el target sea numérico (convirtiendo categorías o texto si los hubiera)
+    y = pd.to_numeric(df[target_col], errors="coerce").to_numpy()
 
-    # Manejo básico de valores nulos en el target si los hubiera
-    valid_idx = ~np.isnan(y)
+    # Limpieza de nulos usando máscara robusta
+    valid_idx = ~pd.isna(y)
     X = X.loc[valid_idx]
     y = y[valid_idx]
 
@@ -96,7 +101,7 @@ def main():
         print(f"  - {key}: {value}")
     print("="*55)
 
-    # Guardar los mejores hiperparámetros en formato CSV para lectura directa en el entrenamiento
+    # Guardar los mejores hiperparámetros en formato CSV
     best_params_df = pd.DataFrame([study.best_params])
     best_params_df["best_auc_roc"] = study.best_value
     
@@ -107,4 +112,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-  
+    
