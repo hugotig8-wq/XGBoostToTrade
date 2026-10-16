@@ -53,7 +53,7 @@ def inspect_max_volume(
     cols_to_show = ["date", "datetime", "ticker", "volume", "close", "high", "low"]
     available_cols = [c for c in cols_to_show if c in df_max_volume.columns]
     
-    print(df_max_volume[available_cols].to_string(index=False))
+    print(df_max_volume[available_cols].head(28).to_string(index=False))
     print("=" * 90 + "\n")
 
 
