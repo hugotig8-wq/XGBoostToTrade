@@ -12,9 +12,9 @@ import pandas as pd
 
 def process_and_merge_news_batches(
     input_files: list[str] = [
-        "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/principal_news_1.csv",
-        "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/principal_news_2.csv",
-        "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/principal_news_3.csv"
+        "/workspaces/XGBoostToTrade/CollectorAgent/data/csv/principal_news_1.csv",
+        "/workspaces/XGBoostToTrade/CollectorAgent/data/csv/principal_news_2.csv",
+        "/workspaces/XGBoostToTrade/CollectorAgent/data/csv/principal_news_3.csv"
     ],
     output_parquet: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/cleaned_sentiment_features.parquet"
 ) -> None:
