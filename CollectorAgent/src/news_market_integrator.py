@@ -102,8 +102,8 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
         g = group.copy()
         
         # Corrección de Data Leakage: Quitamos center=True. 
-        # Evaluamos si la vela actual es un máximo respecto a las 10 velas PASADAS.
-        window = 10
+        # Evaluamos si la vela actual es un máximo respecto a las 30 velas PASADAS.
+        window = 30
         g["is_past_high"] = g["high"] == g["high"].rolling(window=window, closed='right').max()
         g["is_past_low"] = g["low"] == g["low"].rolling(window=window, closed='right').min()
         
