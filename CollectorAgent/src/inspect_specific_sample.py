@@ -72,6 +72,6 @@ if __name__ == "__main__":
     print("--- PRUEBA 1: 15 de Octubre de 2026 a las 12:00 ---")
     inspect_specific_sample(target_datetime="2026-10-15 12:00:00")
 
-    print("\n--- PRUEBA 2: 14 de Octubre de 2026 a las 09:00 ---")
-    inspect_specific_sample(target_datetime="2026-10-14 09:00:00")
+    print("\n--- PRUEBA 2: 15 de Octubre de 2026 a las 16:30:00 ---")
+    inspect_specific_sample(target_datetime="2026-10-15 16:30:00")
   
