@@ -1,78 +1,83 @@
 """
-Módulo de Actualización Diaria Incremental
-------------------------------------------
-Descarga únicamente el último día de cotización para los activos de la Watchlist
-y lo concatena con el archivo Parquet histórico existente, evitando duplicados.
+Módulo ColectorRawAgent (Datos Vírgenes Directos)
+------------------------------------------------
+Descarga los datos históricos y diarios de la Watchlist directamente de yfinance
+sin agregar ningún índice técnico ni transformación, y los guarda en la capa raw.
 """
 
 import os
+from datetime import datetime
+from typing import List
 import pandas as pd
 import yfinance as yf
 
-def update_latest_market_day(
-    tickers: list[str], 
-    parquet_path: str = "data/parquet/financial_data.parquet"
+
+def fetch_and_save_raw_market_data(
+    tickers: List[str], 
+    output_dir: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw"
 ) -> None:
-    """Descarga el último día disponible de yfinance y lo fusiona con el histórico."""
-    print("🔄 Consultando el último día de mercado para la Watchlist...")
+    """Descarga datos crudos (Raw) desde yfinance y los guarda directamente en Parquet."""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 Descargando datos vírgenes para {len(tickers)} activos...")
     
-    new_data_frames = []
+    processed_dfs = []
+    failed_tickers = []
+
     for ticker in tickers:
         try:
-            # period='5d' asegura capturar el último día hábil incluso tras fines de semana o festivos
-            df = yf.download(ticker, period="5d", interval="1d", auto_adjust=True, progress=False)
-            if df.empty:
+            print(f" 📥 Descargando activo crudo: {ticker}...")
+            # Descarga de histórico amplio en escala diaria (o 60d para intradiario si se requiere)
+            df_ticker = yf.download(
+                ticker, period="5y", interval="1d", auto_adjust=True, progress=False
+            )
+            
+            if df_ticker.empty:
+                print(f" ⚠️ Advertencia: No se obtuvieron datos para {ticker}")
+                failed_tickers.append(ticker)
                 continue
-                
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-                
-            df = df.reset_index()
-            df["ticker"] = ticker
-            df.columns = [str(col).lower().replace(" ", "_") for col in df.columns]
+
+            # Aplanar MultiIndex si es generado por yfinance
+            if isinstance(df_ticker.columns, pd.MultiIndex):
+                df_ticker.columns = df_ticker.columns.get_level_values(0)
+
+            df_ticker = df_ticker.reset_index()
+            df_ticker["ticker"] = ticker
             
-            # Normalizar fecha a formato fecha pura
-            df["date"] = pd.to_datetime(df["date"]).dt.date
+            # Normalizar cabeceras a minúsculas para estandarizar el esquema
+            df_ticker.columns = [str(col).lower().replace(" ", "_") for col in df_ticker.columns]
             
-            # Seleccionar estrictamente la fecha más reciente disponible
-            latest_date = df["date"].max()
-            df_latest = df[df["date"] == latest_date].copy()
-            new_data_frames.append(df_latest)
+            processed_dfs.append(df_ticker)
             
         except Exception as e:
-            print(f"❌ Error al obtener datos recientes de {ticker}: {e}")
-            
-    if not new_data_frames:
-        print("⚠️ No se encontraron nuevos datos para añadir.")
+            print(f" ❌ Error al descargar {ticker}: {e}")
+            failed_tickers.append(ticker)
+
+    if not processed_dfs:
+        print("❌ No se pudo procesar ningún activo.")
         return
-        
-    df_new = pd.concat(new_data_frames, ignore_index=True)
-    
-    # Concatenar con el archivo Parquet histórico si ya existe
-    if os.path.exists(parquet_path):
-        print(f"📂 Leyendo archivo histórico existente: {parquet_path}")
-        df_existing = pd.read_parquet(parquet_path)
-        df_existing["date"] = pd.to_datetime(df_existing["date"]).dt.date
-        
-        # Unir y eliminar duplicados (manteniendo el registro más reciente)
-        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-        df_combined = df_combined.drop_duplicates(subset=["date", "ticker"], keep="last")
-        df_combined = df_combined.sort_values(by=["ticker", "date"]).reset_index(drop=True)
-    else:
-        print("📁 No se encontró un archivo previo. Creando la base histórica inicial.")
-        df_combined = df_new
-        
-    # Asegurar columnas de partición o metadatos de fecha
-    df_combined["year"] = pd.to_datetime(df_combined["date"]).dt.year
-    df_combined["month"] = pd.to_datetime(df_combined["date"]).dt.month
-    
-    os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-    df_combined.to_parquet(parquet_path, engine="pyarrow", compression="snappy", index=False)
-    
-    print(f"✅ Archivo actualizado con éxito en: {parquet_path}")
-    print(f"📊 Total de registros consolidados en el dataset: {len(df_combined):,}")
+
+    final_df = pd.concat(processed_dfs, ignore_index=True)
+
+    os.makedirs(output_dir, exist_ok=True)
+    parquet_path = os.path.join(output_dir, "financial_data.parquet")
+
+    # Guardado directo en formato Parquet comprimido con Snappy
+    final_df.to_parquet(
+        parquet_path, engine="pyarrow", compression="snappy", index=False
+    )
+
+    print("\n" + "="*60)
+    print("✅ RESGUARDO DE DATOS VÍRGENES EN CAPA RAW COMPLETADO")
+    print("="*60)
+    print(f" Timestamp de ejecución     : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f" Filas totales almacenadas  : {len(final_df):,}")
+    print(f" Archivo guardado en        : {parquet_path}")
+    if failed_tickers:
+        print(f" Activos fallidos           : {failed_tickers}")
+    print("="*60 + "\n")
+
 
 if __name__ == "__main__":
+    # Watchlist oficial de activos energéticos y materias primas
     watchlist_tickers = [
         "IBE.MC",   # Iberdrola S.A.
         "NEE",      # NextEra Energy Inc.
@@ -80,7 +85,8 @@ if __name__ == "__main__":
         "CVX",      # Chevron Corporation
         "XOM",      # ExxonMobil Corporation
         "WTI",      # W&T Offshore Inc.
-        "BZ=F"      # Brent Crude Oil
+        "BZ=F"      # Brent Crude Oil (EuroOIL)
     ]
-    update_latest_market_day(watchlist_tickers)
-  
+    
+    fetch_and_save_raw_market_data(tickers=watchlist_tickers)
+    
