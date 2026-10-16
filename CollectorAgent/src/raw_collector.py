@@ -111,7 +111,7 @@ class ColectorRawAgent:
         Lee el archivo Parquet recién guardado y muestra una muestra aleatoria
         para corroborar el esquema y el contenido real en disco.
         """
-        parquet_path = os.path.join(self.output_dir, "intraday_raw.parquet")
+        parquet_path = os.path.join(self.output_dir, "financial_data.parquet")
         if not os.path.exists(parquet_path):
             print("⚠️ No existe el archivo Parquet para realizar la inspección.")
             return
