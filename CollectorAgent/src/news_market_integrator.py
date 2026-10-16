@@ -71,8 +71,8 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
         
         tr_smooth = true_range.rolling(window=14).mean()
-        plus_di = 100 * pd.Series(plus_dm).rolling(window=14).mean() / (tr_smooth + 1e-9)
-        minus_di = 100 * pd.Series(minus_dm).rolling(window=14).mean() / (tr_smooth + 1e-9)
+        plus_di = 100 * pd.Series(plus_dm, index=g.index).rolling(window=14).mean() / (tr_smooth + 1e-9)
+        minus_di = 100 * pd.Series(minus_dm, index=g.index).rolling(window=14).mean() / (tr_smooth + 1e-9)
         g["plus_di"] = plus_di
         g["minus_di"] = minus_di
         dx = 100 * (plus_di - minus_di).abs() / ((plus_di + minus_di) + 1e-9)
@@ -106,22 +106,20 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
         g["is_high"] = g["high"] == g["high"].rolling(window=window*2+1, center=True).max()
         g["is_low"] = g["low"] == g["low"].rolling(window=window*2+1, center=True).min()
         
-        # Calcular Retrocesos de Fibonacci y Ondas basadas en los últimos extremos detectados
-        # Estimación simplificada de ondas y niveles para el motor cuantitativo
-        rolling_max = g["high"].rolling(window=50).max()
-        rolling_min = g["low"].rolling(window=50).min()
+        # Retrocesos de Fibonacci
+        rolling_max = g["high"].rolling(window=50, min_periods=1).max()
+        rolling_min = g["low"].rolling(window=50, min_periods=1).min()
         diff = rolling_max - rolling_min
         
-        # Niveles de Fibonacci clave
         g["fib_236"] = rolling_max - (diff * 0.236)
         g["fib_382"] = rolling_max - (diff * 0.382)
         g["fib_500"] = rolling_max - (diff * 0.500)
         g["fib_618"] = rolling_max - (diff * 0.618)
         
-        # Asignación heurística de Ondas de Elliott según posición en el rango
+        # Fase de Ondas de Elliott
         g["elliott_wave_phase"] = np.where(g["close"] > g["fib_382"], "Impulse_Wave_3_or_5", "Correction_Wave_2_or_4")
         
-        # Cálculo dinámico de Stop Loss y Take Profit basados en ATR y Soportes/Resistencias
+        # Cálculo dinámico de Stop Loss y Take Profit
         atr = g["atr_14"].fillna(g["close"] * 0.01)
         g["stop_loss"] = np.where(g["elliott_wave_phase"].str.contains("Impulse"), g["close"] - (2 * atr), g["close"] - (1.5 * atr))
         g["take_profit"] = np.where(g["elliott_wave_phase"].str.contains("Impulse"), g["close"] + (3.5 * atr), g["close"] + (2.5 * atr))
@@ -133,7 +131,7 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
 
 def integrate_news_and_market(
     raw_parquet: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw/financial_data.parquet",
-    news_csv: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/cleaned_sentiment_features.parquet",
+    news_file: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/cleaned_sentiment_features.parquet",
     output_parquet: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/master_ml_dataset.parquet"
 ) -> None:
     """Ejecuta el pipeline completo de integración entre velas raw, noticias y métricas cuantitativas."""
@@ -144,7 +142,8 @@ def integrate_news_and_market(
         return
         
     df_market = pd.read_parquet(raw_parquet)
-    df_market["datetime"] = pd.to_datetime(df_market["datetime"])
+    # Conversión robusta con utc=True para manejar husos horarios intradiarios
+    df_market["datetime"] = pd.to_datetime(df_market["datetime"], utc=True)
     df_market["date"] = df_market["datetime"].dt.date
     
     # 1. Calcular indicadores técnicos
@@ -156,14 +155,16 @@ def integrate_news_and_market(
     df_structured = analyze_market_structure_and_levels(df_tech)
     
     # 3. Cruzar con noticias si el archivo existe
-    if os.path.exists(news_csv):
-        print(f"📰 Cruzando datos con el repositorio de noticias: {news_csv}")
-        # Soporta tanto CSV como Parquet para las noticias
-        df_news = pd.read_parquet(news_csv) if news_csv.endswith(".parquet") else pd.read_csv(news_csv)
+    if os.path.exists(news_file):
+        print(f"📰 Cruzando datos con el repositorio de noticias: {news_file}")
+        df_news = pd.read_parquet(news_file) if news_file.endswith(".parquet") else pd.read_csv(news_file)
+        
         if "published_at" in df_news.columns:
-            df_news["date"] = pd.to_datetime(df_news["published_at"]).dt.date
+            # utc=True resuelve el ValueError de zonas horarias mixtas (+02:00, -07:00, etc.)
+            df_news["published_at_dt"] = pd.to_datetime(df_news["published_at"], utc=True)
+            df_news["date"] = df_news["published_at_dt"].dt.date
             
-            # Merge inteligente por fecha y activo afectado
+            # Merge por fecha y activo afectado
             df_final = pd.merge(
                 df_structured, 
                 df_news, 
@@ -192,4 +193,3 @@ def integrate_news_and_market(
 
 if __name__ == "__main__":
     integrate_news_and_market()
-      
