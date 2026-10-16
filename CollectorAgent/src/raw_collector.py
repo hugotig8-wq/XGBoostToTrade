@@ -86,7 +86,7 @@ class ColectorRawAgent:
         final_df = pd.concat(processed_dfs, ignore_index=True)
 
         # Ruta final del archivo virgen Parquet
-        parquet_path = os.path.join(self.output_dir, "intraday_60d_raw.parquet")
+        parquet_path = os.path.join(self.output_dir, "financial_data.parquet")
 
         # Guardado en formato Parquet comprimido con Snappy
         final_df.to_parquet(
