@@ -36,9 +36,13 @@ def load_best_parameters(csv_path: str = PARAMS_CSV_PATH) -> dict:
     df_params = pd.read_csv(csv_path)
     params = df_params.drop(columns=["best_rmse"], errors="ignore").to_dict(orient="records")[0]
     
-    params["n_estimators"] = int(params["n_estimators"])
-    params["max_depth"] = int(params["max_depth"])
-    params["random_state"] = int(params.get("random_state", 42))
+    params["n_estimators"] = 250
+    params["max_depth"] = 5
+    params["gamma"]=0.01
+    params["learning_rate"] = 0.03
+    params["subsample"] = 0.8
+    params["colsample_bytree"] = 0.8
+    params["random_state"] = 42
     params["eval_metric"] = "rmse"
     
     return params
