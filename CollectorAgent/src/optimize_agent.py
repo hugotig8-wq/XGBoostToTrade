@@ -1,5 +1,5 @@
 """
-Agente Optimizador de Hiperparámetros con TimeSeriesSplit y exportación a CSV.
+Agente Optimizador de Hiperparámetros con TimeSeriesSplit y Regresión XGBoost.
 Evalúa XGBoost mediante validación cruzada temporal y exporta los mejores parámetros.
 """
 
@@ -7,9 +7,9 @@ import os
 import optuna
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier
+from xgboost import XGBRegressor
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import mean_squared_error
 
 # Silenciar mensajes informativos de Optuna para mantener la consola limpia
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -31,22 +31,22 @@ def load_dataset(parquet_path: str = DATASET_PATH):
     # Columnas que no deben ser usadas como predictoras
     ignore_cols = [
         "date", "ticker", "forward_max_high", 
-        "forward_max_profit", "target_high_profit", "published_at", "source_url"
+        "forward_max_profit", "target_high_profit", "published_at", "source_url",
+        "return_1h", "return_3h", "return_6h", "return_12h", "return_1d"
     ]
     
-    # Filtrar solo columnas estrictamente numéricas para evitar errores de tipo object en XGBoost
+    # Filtrar solo columnas estrictamente numéricas
     numeric_cols = df.select_dtypes(include=[np.number, "float", "int", "bool"]).columns.tolist()
     features = [c for c in numeric_cols if c not in ignore_cols]
 
     X = df[features]
     
-    # Seleccionar la columna objetivo (target) disponible
-    target_col = "target_high_profit" if "target_high_profit" in df.columns else df.columns[-1]
+    # Seleccionar la columna objetivo (target) de retorno continuo (ej. return_1h)
+    target_col = "return_1h" if "return_1h" in df.columns else features[0]
     
-    # Asegurar que el target sea numérico (convirtiendo categorías o texto si los hubiera)
     y = pd.to_numeric(df[target_col], errors="coerce").to_numpy()
 
-    # Limpieza de nulos usando máscara robusta
+    # Limpieza de nulos
     valid_idx = ~pd.isna(y)
     X = X.loc[valid_idx]
     y = y[valid_idx]
@@ -55,7 +55,7 @@ def load_dataset(parquet_path: str = DATASET_PATH):
 
 
 def objective_cv(trial, X, y):
-    """Función objetivo que evalúa los hiperparámetros con TimeSeriesSplit (5 pliegues)."""
+    """Función objetivo que evalúa hiperparámetros con TimeSeriesSplit y Regresión."""
     params = {
         "n_estimators": trial.suggest_int("n_estimators", 100, 350),
         "max_depth": trial.suggest_int("max_depth", 3, 8),
@@ -64,25 +64,24 @@ def objective_cv(trial, X, y):
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 0.9),
         "gamma": trial.suggest_float("gamma", 0.5, 5.0),
         "random_state": 42,
-        "eval_metric": "logloss"
+        "eval_metric": "rmse"
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
-    auc_scores = []
+    rmse_scores = []
 
     for train_idx, val_idx in tscv.split(X):
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y[train_idx], y[val_idx]
 
-        model = XGBClassifier(**params)
+        model = XGBRegressor(**params)
         model.fit(X_tr, y_tr)
 
-        # Extraer probabilidad de la clase positiva [:, 1]
-        preds_proba = model.predict_proba(X_val)[:, 1]
-        score = roc_auc_score(y_val, preds_proba)
-        auc_scores.append(score)
+        preds = model.predict(X_val)
+        rmse = np.sqrt(mean_squared_error(y_val, preds))
+        rmse_scores.append(rmse)
 
-    return np.mean(auc_scores)
+    return np.mean(rmse_scores)
 
 
 def main():
@@ -90,12 +89,13 @@ def main():
     features, X, y = load_dataset()
     print(f"📊 Dataset cargado: {len(X)} filas | {len(features)} características")
 
-    print("\n🔎 AGENTE OPTIMIZANDO CON TIME-SERIES CROSS-VALIDATION (5 Folds)...")
-    study = optuna.create_study(direction="maximize")
+    print("\n🔎 AGENTE OPTIMIZANDO REGRESIÓN CON TIME-SERIES CROSS-VALIDATION (5 Folds)...")
+    # Minimizamos el RMSE, por lo que direction="minimize"
+    study = optuna.create_study(direction="minimize")
     study.optimize(lambda trial: objective_cv(trial, X, y), n_trials=30)
 
     print("\n" + "="*55)
-    print(f"🏆 MEJOR AUC-ROC PROMEDIO EN VALIDACIÓN CRUZADA: {study.best_value:.4f}")
+    print(f"🏆 MEJOR RMSE PROMEDIO EN VALIDACIÓN CRUZADA: {study.best_value:.5f}")
     print("\nMejores Hiperparámetros Encontrados:")
     for key, value in study.best_params.items():
         print(f"  - {key}: {value}")
@@ -103,7 +103,7 @@ def main():
 
     # Guardar los mejores hiperparámetros en formato CSV
     best_params_df = pd.DataFrame([study.best_params])
-    best_params_df["best_auc_roc"] = study.best_value
+    best_params_df["best_rmse"] = study.best_value
     
     os.makedirs(os.path.dirname(OUTPUT_CSV_PATH), exist_ok=True)
     best_params_df.to_csv(OUTPUT_CSV_PATH, index=False)
