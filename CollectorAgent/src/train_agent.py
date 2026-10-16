@@ -1,8 +1,9 @@
 """
-Módulo de Entrenamiento Formal con XGBRegressor (train_agent.py)
---------------------------------------------------------------
-Carga los hiperparámetros optimizados desde CSV, entrena el modelo XGBoost 
-empleando TimeSeriesSplit y guarda el modelo final de regresión listo para producción.
+Módulo de Entrenamiento y Comparación Multi-Horizonte con XGBRegressor (train_agent.py)
+------------------------------------------------------------------------------------
+Carga los hiperparámetros optimizados, entrena modelos independientes para cada 
+horizonte de retorno (1h, 3h, 6h, 12h, 1d) empleando TimeSeriesSplit, 
+compara sus resultados de RMSE y guarda los modelos listos para producción.
 """
 
 import os
@@ -15,7 +16,7 @@ from sklearn.metrics import mean_squared_error
 # Rutas absolutas del entorno
 DATASET_PATH = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/master_ml_dataset.parquet"
 PARAMS_CSV_PATH = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/best_hyperparameters.csv"
-MODEL_OUTPUT_PATH = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/xgboost_trading_model.json"
+MODEL_OUTPUT_DIR = "/workspaces/XGBoostToTrade/CollectorAgent/data/models/"
 
 
 def load_best_parameters(csv_path: str = PARAMS_CSV_PATH) -> dict:
@@ -33,21 +34,18 @@ def load_best_parameters(csv_path: str = PARAMS_CSV_PATH) -> dict:
         }
     
     df_params = pd.read_csv(csv_path)
-    # Excluir columnas métricas auxiliares si existen
     params = df_params.drop(columns=["best_rmse"], errors="ignore").to_dict(orient="records")[0]
     
-    # Asegurar tipos correctos para XGBoost
     params["n_estimators"] = int(params["n_estimators"])
     params["max_depth"] = int(params["max_depth"])
     params["random_state"] = int(params.get("random_state", 42))
     params["eval_metric"] = "rmse"
     
-    print("📋 Hiperparámetros óptimos cargados correctamente desde el CSV.")
     return params
 
 
 def load_dataset(parquet_path: str = DATASET_PATH):
-    """Carga el dataset maestro y separa las características del objetivo."""
+    """Carga el dataset maestro y separa las características."""
     if not os.path.exists(parquet_path):
         raise FileNotFoundError(f"❌ No se encontró el dataset maestro en: {parquet_path}")
         
@@ -55,75 +53,91 @@ def load_dataset(parquet_path: str = DATASET_PATH):
     if "date" in df.columns:
         df = df.sort_values("date")
 
-    # Columnas que no deben ser usadas como predictoras
+    # Columnas estrictamente prohibidas para evitar Data Leakage
     ignore_cols = [
-        "date", "ticker", "forward_max_high", 
-        "forward_max_profit", "target_high_profit", "published_at", "source_url",
+        "date", "ticker", "published_at", "source_url",
+        "forward_max_high", "forward_max_profit", "target_high_profit",
         "return_1h", "return_3h", "return_6h", "return_12h", "return_1d"
     ]
     
-    # Filtrar solo columnas estrictamente numéricas
     numeric_cols = df.select_dtypes(include=[np.number, "float", "int", "bool"]).columns.tolist()
     features = [c for c in numeric_cols if c not in ignore_cols]
 
     X = df[features]
-    
-    # Seleccionar la columna objetivo (target) de retorno continuo
-    target_col = "return_1h" if "return_1h" in df.columns else features[0]
-    y = pd.to_numeric(df[target_col], errors="coerce").to_numpy()
-
-    # Limpieza robusta de nulos con pd.isna()
-    valid_idx = ~pd.isna(y)
-    X = X.loc[valid_idx]
-    y = y[valid_idx]
-
-    return features, X, y
+    return df, X, features
 
 
-def train_formal_model():
+def train_and_compare_multi_horizon():
     print(f"🚀 Cargando dataset maestro desde: {DATASET_PATH}")
-    features, X, y = load_dataset()
-    print(f"📊 Dataset listo: {len(X):,} filas | {len(features)} características")
+    df, X, features = load_dataset()
+    print(f"📊 Dataset base: {len(X):,} filas | {len(features)} características válidas (sin leakage)")
 
-    # Cargar los hiperparámetros optimizados
     params = load_best_parameters()
+    
+    # Horizontes temporales a evaluar y comparar
+    horizons = ["return_1h", "return_3h", "return_6h", "return_12h", "return_1d"]
+    available_horizons = [h for h in horizons if h in df.columns]
 
-    print("\n" + "="*60)
-    print("📈 INICIANDO ENTRENAMIENTO CON VALIDACIÓN CRUZADA TEMPORAL (RMSE)")
-    print("="*60)
+    if not available_horizons:
+        print("❌ No se encontraron columnas de retorno en el dataset.")
+        return
 
     tscv = TimeSeriesSplit(n_splits=5)
-    rmse_scores = []
+    comparison_results = {}
 
-    fold = 1
-    for train_idx, val_idx in tscv.split(X):
-        X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_tr, y_val = y[train_idx], y[val_idx]
+    print("\n" + "="*70)
+    print("📈 INICIANDO ENTRENAMIENTO Y COMPARACIÓN MULTI-HORIZONTE (TimeSeriesSplit)")
+    print("="*70)
 
-        model = XGBRegressor(**params)
-        model.fit(X_tr, y_tr)
+    os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)
 
-        preds = model.predict(X_val)
-        rmse = np.sqrt(mean_squared_error(y_val, preds))
-        rmse_scores.append(rmse)
+    for target_col in available_horizons:
+        print(f"\n🎯 Evaluando Horizonte Objetivo: [{target_col}]")
         
-        print(f" Fold {fold} -> Train: {len(X_tr):6,} | Val: {len(X_val):6,} | RMSE: {rmse:.5f}")
-        fold += 1
+        # Preparar target y limpiar nulos específicos de este horizonte
+        y = pd.to_numeric(df[target_col], errors="coerce").to_numpy()
+        valid_idx = ~pd.isna(y)
+        X_target = X.loc[valid_idx]
+        y_target = y[valid_idx]
 
-    print("="*60)
-    print(f"🏆 RMSE PROMEDIO EN VALIDACIÓN CRUZADA: {np.mean(rmse_scores):.5f}")
-    print("="*60 + "\n")
+        fold = 1
+        rmse_scores = []
 
-    # Entrenamiento del modelo definitivo con todo el dataset histórico disponible
-    print("💾 Entrenando modelo final de producción con todo el dataset...")
-    final_model = XGBRegressor(**params)
-    final_model.fit(X, y)
+        for train_idx, val_idx in tscv.split(X_target):
+            X_tr, X_val = X_target.iloc[train_idx], X_target.iloc[val_idx]
+            y_tr, y_val = y_target[train_idx], y_target[val_idx]
 
-    os.makedirs(os.path.dirname(MODEL_OUTPUT_PATH), exist_ok=True)
-    final_model.save_model(MODEL_OUTPUT_PATH)
-    print(f"🎯 Modelo formal de regresión guardado exitosamente en: {MODEL_OUTPUT_PATH}")
+            model = XGBRegressor(**params)
+            model.fit(X_tr, y_tr)
+
+            preds = model.predict(X_val)
+            rmse = np.sqrt(mean_squared_error(y_val, preds))
+            rmse_scores.append(rmse)
+            fold += 1
+
+        mean_rmse = np.mean(rmse_scores)
+        comparison_results[target_col] = mean_rmse
+        print(f"   -> RMSE Promedio para {target_col}: {mean_rmse:.5f}")
+
+        # Entrenar modelo final de producción para este horizonte con todo el histórico disponible
+        final_model = XGBRegressor(**params)
+        final_model.fit(X_target, y_target)
+        
+        model_path = os.path.join(MODEL_OUTPUT_DIR, f"xgboost_model_{target_col}.json")
+        final_model.save_model(model_path)
+        print(f"   💾 Modelo guardado en: {model_path}")
+
+    # Tabla Comparativa Final
+    print("\n" + "="*70)
+    print("🏆 TABLA COMPARATIVA DE RENDIMIENTO (RMSE por Horizonte)")
+    print("="*70)
+    sorted_comparison = sorted(comparison_results.items(), key=lambda x: x[1])
+    for horizon, rmse in sorted_comparison:
+        print(f"  * {horizon:10} | RMSE Promedio: {rmse:.5f}")
+    print("="*70)
+    print("✅ ¡Entrenamiento multi-horizonte y comparativa completados con éxito!\n")
 
 
 if __name__ == "__main__":
-    train_formal_model()
-    
+    train_and_compare_multi_horizon()
+        
