@@ -19,7 +19,7 @@ class ColectorRawAgent:
         self, 
         watchlist: List[str] = None, 
         #output_dir: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw"
-        output_dir: str = "/user/humberto/raw"
+        output_dir: str = "/home/humberto/raw"
     ):
         """
         Inicializa el agente colector virgen con la lista completa de seguimiento de tu Watchlist.
