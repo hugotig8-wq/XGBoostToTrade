@@ -132,7 +132,7 @@ def analyze_market_structure_and_levels(df: pd.DataFrame) -> pd.DataFrame:
 def integrate_news_and_market(
     raw_parquet: str = "/home/humberto/raw/financial_data.csv",
     news_file: str = "/home/humberto/data/news_deepseek.csv",
-    output_parquet: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/master_ml_dataset.parquet"
+    output_parquet: str = "/home/humberto/data/master_ml_dataset.parquet"
 ) -> None:
     """Ejecuta el pipeline completo de integración entre velas raw, noticias y métricas cuantitativas."""
     print("🔄 Iniciando integración avanzada de mercado y noticias...")
