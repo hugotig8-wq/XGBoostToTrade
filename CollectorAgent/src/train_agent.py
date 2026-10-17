@@ -14,27 +14,15 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
 
 # Rutas absolutas del entorno
-DATASET_PATH = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/master_ml_dataset.parquet"
-PARAMS_CSV_PATH = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/best_hyperparameters.csv"
-MODEL_OUTPUT_DIR = "/workspaces/XGBoostToTrade/CollectorAgent/data/models/"
+DATASET_PATH = "/home/humberto/master_ml_dataset.parquet"
+MODEL_OUTPUT_DIR = "/home/humberto/"
 
 
-def load_best_parameters(csv_path: str = PARAMS_CSV_PATH) -> dict:
+def load_best_parameters() -> dict:
     """Carga los hiperparámetros optimizados desde el archivo CSV."""
-    if not os.path.exists(csv_path):
-        print(f"⚠️ No se encontró el archivo de hiperparámetros en {csv_path}. Usando parámetros por defecto.")
-        return {
-            "n_estimators": 250,
-            "max_depth": 5,
-            "learning_rate": 0.03,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "random_state": 42,
-            "eval_metric": "rmse"
-        }
-    
-    df_params = pd.read_csv(csv_path)
-    params = df_params.drop(columns=["best_rmse"], errors="ignore").to_dict(orient="records")[0]
+
+    df_params = pd.DataFrame()
+    params = df_params
     
     params["n_estimators"] = 250
     params["max_depth"] = 5
