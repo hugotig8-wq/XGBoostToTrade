@@ -18,7 +18,8 @@ class ColectorRawAgent:
     def __init__(
         self, 
         watchlist: List[str] = None, 
-        output_dir: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw"
+        #output_dir: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw"
+        output_dir: str = "/XGBoostToTrade/CollectorAgent/data/parquet/raw"
     ):
         """
         Inicializa el agente colector virgen con la lista completa de seguimiento de tu Watchlist.
@@ -89,8 +90,12 @@ class ColectorRawAgent:
         parquet_path = os.path.join(self.output_dir, "financial_data.parquet")
 
         # Guardado en formato Parquet comprimido con Snappy
-        final_df.to_parquet(
-            parquet_path, engine="pyarrow", compression="snappy", index=False
+        #final_df.to_parquet(
+            #parquet_path, engine="pyarrow", compression="snappy", index=False
+        #)
+
+        final_df.to_csv(
+            parquet_path
         )
 
         print("\n" + "="*60)
