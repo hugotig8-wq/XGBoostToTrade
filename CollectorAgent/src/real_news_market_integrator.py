@@ -164,7 +164,7 @@ def integrate_news_and_market(raw_csv: str, news_file: str, output_parquet: str)
 
 if __name__ == "__main__":
     integrate_news_and_market(
-        raw_csv="/home/humberto/raw/financial_data.csv",
-        news_file="/home/humberto/data/news_deepseek.csv",
-        output_parquet="/home/humberto/data/master_ml_dataset.parquet"
+        raw_csv="/home/humberto/financial_data.csv",
+        news_file="/home/humberto/news_deepseek.csv",
+        output_parquet="/home/humberto/master_ml_dataset.parquet"
       )
