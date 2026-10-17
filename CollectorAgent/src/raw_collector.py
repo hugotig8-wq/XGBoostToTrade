@@ -97,6 +97,7 @@ class ColectorRawAgent:
         final_df.to_csv(
             parquet_path
         )
+        print(final_df.to_string())
 
         print("\n" + "="*60)
         print("✅ RESGUARDO DE DATOS VÍRGENES (60 días - 1h) COMPLETADO")
