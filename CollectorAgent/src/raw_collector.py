@@ -112,24 +112,7 @@ class ColectorRawAgent:
 
         return final_df
 
-    def inspect_random_sample(self, sample_size: int = 5) -> None:
-        """
-        Lee el archivo Parquet recién guardado y muestra una muestra aleatoria
-        para corroborar el esquema y el contenido real en disco.
-        """
-        parquet_path = os.path.join(self.output_dir, "financial_data.parquet")
-        if not os.path.exists(parquet_path):
-            print("⚠️ No existe el archivo Parquet para realizar la inspección.")
-            return
-
-        df_disk = pd.read_parquet(parquet_path)
-        
-        print("🔍 MUESTRA ALEATORIA DEL DATAFRAME GUARDADO (Raw Disk Inspection):")
-        print("-" * 90)
-        sample_df = df_disk.sample(n=min(sample_size, len(df_disk))).sort_index()
-        print(sample_df.to_string(index=False))
-        print("-" * 90)
-
+    
 
 if __name__ == "__main__":
     # Instanciar y ejecutar el agente colector
@@ -138,7 +121,3 @@ if __name__ == "__main__":
     # 1. Descargar y resguardar en la ruta especificada
     raw_dataframe = agent.fetch_and_save_60d_intraday()
     
-    # 2. Corroborar con una muestra aleatoria del archivo en disco
-    if not raw_dataframe.empty:
-        agent.inspect_random_sample(sample_size=7)
-      
