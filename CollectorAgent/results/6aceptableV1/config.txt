@@ -1,0 +1,50 @@
+params_reg = {
+        'objective': 'reg:squarederror',
+        'n_estimators': 500,       # 500 árboles para todos
+        'learning_rate': 0.05,     # Tasa base
+        'max_depth': 4,
+        'random_state': 42
+    }
+    
+    # El IF MÁGICO para 12h
+    if target == 'return_12h':
+        print("   ⚙️ Aplicando hiperparámetros específicos para 12h (Regresión)...")
+        params_reg['learning_rate'] = 0.01 # Aprendizaje más lento
+        params_reg['max_depth'] = 5        # Árboles más profundos
+        params_reg['subsample'] = 0.8      # Prevenir sobreajuste
+        params_reg['colsample_bytree'] = 0.8
+
+    model_reg = xgb.XGBRegressor(**params_reg)
+    model_reg.fit(X_train, y_reg_train)
+    
+    preds_reg = model_reg.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_reg_test, preds_reg))
+    print(f"   -> RMSE Promedio: {rmse:.5f}")
+
+    # Guardar JSON de Regresión
+    model_reg.save_model(f'reg_xgboost_{target}_v8.json')
+
+    # --------------------------------------------------
+    # B) CLASIFICACIÓN (Predecir si Sube o Baja)
+    # --------------------------------------------------
+    print("📊 Entrenando Clasificación...")
+    params_clf = {
+        'objective': 'binary:logistic',
+        'n_estimators': 500,       # 500 árboles para todos
+        'learning_rate': 0.05,
+        'max_depth': 4,
+        'random_state': 42,
+        'eval_metric': 'logloss'
+    }
+    
+    # El IF MÁGICO para 12h
+    if target == 'return_12h':
+        print("   ⚙️ Aplicando hiperparámetros específicos para 12h (Clasificación)...")
+        params_clf['learning_rate'] = 0.01
+        params_clf['max_depth'] = 5
+        # Damos más peso a la clase positiva (subidas) porque estaba desbalanceado
+        # (El base_score anterior era 0.34, así que hay más bajadas que subidas)
+        params_clf['scale_pos_weight'] = 2.0
+
+
+Con trainer_agent_v8.py
