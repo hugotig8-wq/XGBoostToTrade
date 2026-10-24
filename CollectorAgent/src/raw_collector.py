@@ -53,7 +53,7 @@ class ColectorRawAgent:
                 df_ticker = yf.download(
                     ticker, 
                     #period="60d",
-                    period="8d"
+                    period="8d",
                     interval="1h", 
                     auto_adjust=True, 
                     progress=False
