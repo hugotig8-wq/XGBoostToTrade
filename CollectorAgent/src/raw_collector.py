@@ -19,7 +19,7 @@ class ColectorRawAgent:
         self, 
         watchlist: List[str] = None, 
         #output_dir: str = "/workspaces/XGBoostToTrade/CollectorAgent/data/parquet/raw"
-        output_dir: str = "/home/humberto/raw"
+        output_dir: str = "/home/humberto"
     ):
         """
         Inicializa el agente colector virgen con la lista completa de seguimiento de tu Watchlist.
@@ -52,7 +52,8 @@ class ColectorRawAgent:
                 # Límite técnico de yfinance para velas de 1 hora: period="60d", interval="1h"
                 df_ticker = yf.download(
                     ticker, 
-                    period="60d", 
+                    #period="60d",
+                    period="8d"
                     interval="1h", 
                     auto_adjust=True, 
                     progress=False
@@ -87,7 +88,7 @@ class ColectorRawAgent:
         final_df = pd.concat(processed_dfs, ignore_index=True)
 
         # Ruta final del archivo virgen Parquet
-        parquet_path = os.path.join(self.output_dir, "financial_data.parquet")
+        parquet_path = os.path.join(self.output_dir, "financial_data2310.parquet")
 
         # Guardado en formato Parquet comprimido con Snappy
         #final_df.to_parquet(
@@ -97,7 +98,7 @@ class ColectorRawAgent:
         final_df.to_csv(
             parquet_path
         )
-        print(final_df.to_string())
+        #print(final_df.to_string())
 
         print("\n" + "="*60)
         print("✅ RESGUARDO DE DATOS VÍRGENES (60 días - 1h) COMPLETADO")
