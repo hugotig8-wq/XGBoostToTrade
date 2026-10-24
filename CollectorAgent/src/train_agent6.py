@@ -111,7 +111,7 @@ def train_and_compare_multi_horizon():
             X_val_imp = imputer_reg.transform(X_val)
 
             # B. Feature Selection para regresión
-            k_best = min(5, X_tr_imp.shape[1])
+            k_best = min(20, X_tr_imp.shape[1])
             selector = SelectKBest(score_func=f_regression, k=k_best)
             X_tr_sel = selector.fit_transform(X_tr_imp, y_tr)
             X_val_sel = selector.transform(X_val_imp)
@@ -161,7 +161,7 @@ def train_and_compare_multi_horizon():
             X_val_imp = imputer_clf.transform(X_val)
 
             # B. Feature Selection para clasificación
-            k_best = min(5, X_tr_imp.shape[1])
+            k_best = min(20, X_tr_imp.shape[1])
             selector = SelectKBest(score_func=f_classif, k=k_best)
             X_tr_sel = selector.fit_transform(X_tr_imp, y_tr)
             X_val_sel = selector.transform(X_val_imp)
