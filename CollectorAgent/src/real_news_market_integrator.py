@@ -59,7 +59,7 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         g["obv"] = (np.sign(g["close"].diff()) * g["volume"]).fillna(0).cumsum()
         g["relative_volume"] = g["volume"] / (g["volume"].rolling(window=20).mean() + 1e-9)
         
-        # 7. VWAP DIARIO (Corrección del error de Gemini)
+        # 7. VWAP DIARIO
         typical_price = (g["high"] + g["low"] + g["close"]) / 3
         vwap_daily = (typical_price * g["volume"]).groupby(g["date"]).cumsum() / (g["volume"].groupby(g["date"]).cumsum() + 1e-9)
         g["vwap"] = vwap_daily
@@ -76,7 +76,6 @@ def apply_elliott_and_levels(df: pd.DataFrame, window: int) -> pd.DataFrame:
     for ticker, group in df.groupby("ticker"):
         g = group.copy()
         
-        # Encontrar máximos y mínimos locales (Pivotes) evitando Data Leakage
         high_values = g["high"].shift(1).ffill().values
         max_indices = argrelextrema(high_values, np.greater, order=window//2)[0]
         max_mask = np.zeros(len(g), dtype=bool)
@@ -87,25 +86,16 @@ def apply_elliott_and_levels(df: pd.DataFrame, window: int) -> pd.DataFrame:
         min_mask = np.zeros(len(g), dtype=bool)
         min_mask[min_indices] = True
         
-        # Guardar el último pivote visto (swing high/low)
         g[f"last_swing_high{col_suffix}"] = g["high"].where(max_mask).ffill()
         g[f"last_swing_low{col_suffix}"] = g["low"].where(min_mask).ffill()
-        
-        # Rango del pivote
         g[f"swing_range{col_suffix}"] = g[f"last_swing_high{col_suffix}"] - g[f"last_swing_low{col_suffix}"]
-        
-        # Fuerza estructural (para la dominancia)
         g[f"wave_strength{col_suffix}"] = g[f"swing_range{col_suffix}"] / (g["close"] + 1e-9)
-        
-        # Proyección Fibonacci para TP (Extensión 0.618) y SL (Invalidación de onda)
         g[f"fib_tp{col_suffix}"] = g[f"last_swing_high{col_suffix}"] + (g[f"swing_range{col_suffix}"] * 0.618)
         g[f"fib_sl{col_suffix}"] = g[f"last_swing_low{col_suffix}"] - (g["atr_14"] * 0.5)
         
-        # Fase: 1 si está por encima del 61.8% (Impulso), -1 si está por debajo (Corrección)
         threshold_impulse = g[f"last_swing_low{col_suffix}"] + (g[f"swing_range{col_suffix}"] * 0.618)
         g[f"elliott_phase{col_suffix}"] = np.where(g["close"] > threshold_impulse, 1, -1)
         
-        # SL/TP dinámicos (Si es corrección, la proyección es más conservadora)
         g[f"structural_sl{col_suffix}"] = np.where(g[f"elliott_phase{col_suffix}"] == 1, g[f"fib_sl{col_suffix}"], g[f"last_swing_high{col_suffix}"] + (g["atr_14"] * 0.5))
         g[f"structural_tp{col_suffix}"] = np.where(g[f"elliott_phase{col_suffix}"] == 1, g[f"fib_tp{col_suffix}"], g[f"last_swing_low{col_suffix}"] - (g[f"swing_range{col_suffix}"] * 0.618))
         
@@ -131,7 +121,7 @@ def integrate_news_and_market(raw_csv: str, news_file: str, output_parquet: str)
     df_elliott = apply_elliott_and_levels(df_elliott, window=80)
     df_elliott = apply_elliott_and_levels(df_elliott, window=100)
     
-    # 4. Dominancia de Elliott (Elegir la ventana con mayor fuerza estructural)
+    # 4. Dominancia de Elliott
     conditions = [
         (df_elliott["wave_strength_60"] >= df_elliott["wave_strength_80"]) & (df_elliott["wave_strength_60"] >= df_elliott["wave_strength_100"]),
         (df_elliott["wave_strength_80"] >= df_elliott["wave_strength_60"]) & (df_elliott["wave_strength_80"] >= df_elliott["wave_strength_100"]),
@@ -140,17 +130,42 @@ def integrate_news_and_market(raw_csv: str, news_file: str, output_parquet: str)
     choices = [df_elliott["elliott_phase_60"], df_elliott["elliott_phase_80"], df_elliott["elliott_phase_100"]]
     df_elliott["dominant_elliott_phase"] = np.select(conditions, choices, default=0)
     
-    # 5. Cruzar con noticias (Opcional según disponibilidad)
+    # 5. Cruzar con noticias conservando TODAS (Agregación de características)
     if os.path.exists(news_file):
-        print(f"📰 Cruzando con noticias: {news_file}")
+        print(f"📰 Cruzando y agregando noticias: {news_file}")
         df_news = pd.read_parquet(news_file) if news_file.endswith(".parquet") else pd.read_csv(news_file)
         if "published_at" in df_news.columns:
             df_news["published_at_dt"] = pd.to_datetime(df_news["published_at"], utc=True)
             df_news["date"] = df_news["published_at_dt"].dt.date
             df_elliott["date"] = df_elliott["datetime"].dt.date
             
-            # Merge aproximado
-            df_final = pd.merge(df_elliott, df_news, how="left", left_on=["date", "ticker"], right_on=["date", "affected_asset"], suffixes=("_market", "_news"))
+            df_news = df_news.rename(columns={"affected_asset": "ticker"})
+            
+            # Convertir event_type a variables Dummy para no perder la info de tipos de evento
+            event_dummies = pd.get_dummies(df_news["event_type"], prefix="evt").astype(int)
+            df_news = pd.concat([df_news, event_dummies], axis=1)
+            
+            # Agrupar por fecha y ticker calculando la suma, el máximo y la media
+            agg_funcs = {
+                "sentiment_score": ["mean", "sum"], 
+                "impact_magnitude": ["max", "mean"],
+                "confidence_score": "mean",
+                "asset_exposure_score": "mean",
+                "event_type": "count"
+            }
+            for col in event_dummies.columns:
+                agg_funcs[col] = "sum"
+                
+            df_news_agg = df_news.groupby(["date", "ticker"]).agg(agg_funcs)
+            df_news_agg.columns = ["_".join(col).strip() for col in df_news_agg.columns.values]
+            df_news_agg = df_news_agg.rename(columns={"event_type_count": "news_count"})
+            
+            # Merge 1 a 1 sin duplicar velas de mercado
+            df_final = pd.merge(df_elliott, df_news_agg, how="left", left_on=["date", "ticker"], right_index=True)
+            
+            # Rellenar con 0 los días sin noticias
+            news_cols = [c for c in df_final.columns if c not in df_elliott.columns]
+            df_final[news_cols] = df_final[news_cols].fillna(0)
         else:
             df_final = df_elliott
     else:
@@ -167,4 +182,4 @@ if __name__ == "__main__":
         raw_csv="/home/humberto/financial_data.csv",
         news_file="/home/humberto/news_deepseek.csv",
         output_parquet="/home/humberto/master_ml_dataset.parquet"
-      )
+            )
