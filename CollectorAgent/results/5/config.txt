@@ -7,3 +7,4 @@ params = {
         "colsample_bytree": 0.8,
         "random_state": 42,
   }
+con trainer_agent7.py
