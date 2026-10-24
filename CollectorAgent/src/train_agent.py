@@ -19,20 +19,17 @@ MODEL_OUTPUT_DIR = "/home/humberto/"
 
 
 def load_best_parameters() -> dict:
-    """Carga los hiperparámetros optimizados desde el archivo CSV."""
-
-    df_params = pd.DataFrame()
-    params = df_params
-    
-    params["n_estimators"] = 250
-    params["max_depth"] = 5
-    params["gamma"]=0.01
-    params["learning_rate"] = 0.03
-    params["subsample"] = 0.8
-    params["colsample_bytree"] = 0.8
-    params["random_state"] = 42
-    params["eval_metric"] = "rmse"
-    
+    """Carga los hiperparámetros optimizados."""
+    params = {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "gamma": 0.01,
+        "learning_rate": 0.03,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "random_state": 42,
+        "eval_metric": "rmse"
+    }
     return params
 
 
@@ -45,11 +42,14 @@ def load_dataset(parquet_path: str = DATASET_PATH):
     if "date" in df.columns:
         df = df.sort_values("date")
 
-    # Columnas estrictamente prohibidas para evitar Data Leakage
+    # Columnas estrictamente prohibidas para evitar Data Leakage y errores de XGBoost
     ignore_cols = [
-        "date", "ticker", "published_at", "source_url",
+        "date", "ticker", "published_at", "published_at_dt", "source_url",
         "forward_max_high", "forward_max_profit", "target_high_profit",
-        "return_1h", "return_3h", "return_6h", "return_12h", "return_1d"
+        "return_1h", "return_3h", "return_6h", "return_12h", "return_1d",
+        "return_2d", "return_3d", "return_5d", "return_10d",
+        "source", "event_actor", "subject_entity", "sector", 
+        "event_type", "relationship_reason", "return_status", "price_timestamp"
     ]
     
     numeric_cols = df.select_dtypes(include=[np.number, "float", "int", "bool"]).columns.tolist()
@@ -132,4 +132,3 @@ def train_and_compare_multi_horizon():
 
 if __name__ == "__main__":
     train_and_compare_multi_horizon()
-        
