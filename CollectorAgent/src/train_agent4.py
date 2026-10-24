@@ -60,7 +60,7 @@ def train_and_compare_multi_horizon():
         print("❌ No se encontraron columnas de retorno en el dataset.")
         return
 
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=2)
     comparison_results = {}
 
     os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)
